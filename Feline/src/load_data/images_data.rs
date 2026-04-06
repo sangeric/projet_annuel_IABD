@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use image::{DynamicImage, GenericImageView};
 use image::imageops::FilterType;
 use rand::prelude::*;
-use crate::models::linear::function::train_linear;
+use crate::models::linear::function::{test_handler, train_linear};
 
 pub fn pipeline(){
     let mut train = DataSet{
@@ -12,12 +12,22 @@ pub fn pipeline(){
     };
     let size_width:u32 = 32;
     let size_height:u32 = 32;
-    build_datasets(r"src\data\test\cats", r"src\data\test\lion", r"src\data\test\cheetah",&mut train, size_width, size_height);
+    build_datasets(r"src\data\train\cats", r"src\data\train\lion", r"src\data\train\cheetah",&mut train, size_width, size_height);
     let nb_image_train = train.features.len();
     println!("\n----------------------------------------------------next----------------------------------------------------\n");
     println!("Train images: {}", nb_image_train);
-    train_linear(&train, size_width, size_height, nb_image_train);
-    //fetch_struct(&train);
+    let (weights, biases) = train_linear(&train, size_width, size_height, nb_image_train);
+
+    let mut test = DataSet{
+        features: Vec::<Vec<f32>>::new(),
+        specie: Vec::<u8>::new(),
+    };
+    build_datasets(r"src\data\test\cats", r"src\data\test\lion", r"src\data\test\cheetah",&mut test, size_width, size_height);
+    println!("test : ------------------------------------------------");
+    let nb_image_test = test.features.len();
+    println!("test images: {}", nb_image_test);
+
+    test_handler(&test, &weights, &biases);
 }
 
 
