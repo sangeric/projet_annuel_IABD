@@ -1,6 +1,7 @@
 // src/bin/test_synthetic.rs
 
 use felidae_classifier::tensor::Matrix;
+use felidae_classifier::models::linear::LinearClassifier;
 
 fn main() {
     println!("=== Synthetic Test Cases ===\n");
@@ -51,9 +52,7 @@ fn main() {
     print_dataset("Non-Linearly Separable", &nonlinear_data);
 
     // ----------------------------------------------------------------
-    // Represent both datasets as Matrix so the rest of the project
-    // can consume them — models expect a Matrix of shape (N x features)
-    // and a flat Vec<usize> of labels
+    // Convert both datasets to Matrix format
     // ----------------------------------------------------------------
     println!("\n--- Converting to Matrix format ---");
 
@@ -69,10 +68,67 @@ fn main() {
         x_nonlinear.rows, x_nonlinear.cols, y_nonlinear.len()
     );
 
-    println!("\nAll synthetic test cases loaded successfully.");
+    // ----------------------------------------------------------------
+    // LINEAR MODEL ON DATASET 1 — expect high accuracy
+    // 2 input features, 3 classes, learning rate 0.1
+    // ----------------------------------------------------------------
+    println!("\n=== Linear Classifier on Dataset 1 (linearly separable) ===\n");
+
+    let mut clf1 = LinearClassifier::new(2, 3, 0.1);
+    clf1.train(&x_linear, &y_linear, 1000);
+
+    let preds1 = clf1.predict(&x_linear);
+    println!("\nResults:");
+    print_predictions(&preds1, &y_linear);
+    println!("Final accuracy: {:.1}%", clf1.accuracy(&x_linear, &y_linear) * 100.0);
+
+    // ----------------------------------------------------------------
+    // LINEAR MODEL ON DATASET 2 — expect poor accuracy (KO cases)
+    // Same setup, but data is not linearly separable
+    // ----------------------------------------------------------------
+    println!("\n=== Linear Classifier on Dataset 2 (non-linearly separable) ===\n");
+
+    let mut clf2 = LinearClassifier::new(2, 3, 0.1);
+    clf2.train(&x_nonlinear, &y_nonlinear, 1000);
+
+    let preds2 = clf2.predict(&x_nonlinear);
+    println!("\nResults:");
+    print_predictions(&preds2, &y_nonlinear);
+    println!("Final accuracy: {:.1}%", clf2.accuracy(&x_nonlinear, &y_nonlinear) * 100.0);
+
+    // ----------------------------------------------------------------
+    // IDENTIFY KO CASES — which samples did the linear model get wrong?
+    // These are the inputs transform.rs will need to fix
+    // ----------------------------------------------------------------
+    println!("\n=== KO Cases (misclassified by linear model on dataset 2) ===\n");
+    print_ko_cases(&preds2, &y_nonlinear, &nonlinear_data);
+
+    // ----------------------------------------------------------------
+    // LINEAR MODEL + TRANSFORM ON DATASET 2 — fixing the KO cases
+    // We apply polynomial_transform before training and predicting
+    // ----------------------------------------------------------------
+    println!("\n=== Linear Classifier + Transform on Dataset 2 ===\n");
+
+    use felidae_classifier::models::linear::transform::{
+        polynomial_transform,
+        transformed_feature_count,
+    };
+
+    // Transform the input — goes from (17 × 2) to (17 × 5)
+    let x_transformed = polynomial_transform(&x_nonlinear);
+    println!("Transformed shape: {}x{}", x_transformed.rows, x_transformed.cols);
+
+    // Note: n_features is now 5 instead of 2
+    let mut clf3 = LinearClassifier::new(transformed_feature_count(), 3, 0.1);
+    clf3.train(&x_transformed, &y_nonlinear, 1000);
+
+    let preds3 = clf3.predict(&x_transformed);
+    println!("\nResults:");
+    print_predictions(&preds3, &y_nonlinear);
+    println!("Final accuracy: {:.1}%", clf3.accuracy(&x_transformed, &y_nonlinear) * 100.0);
 }
 
-/// Pretty-prints a dataset — useful for the report
+/// Pretty-prints a dataset
 fn print_dataset(name: &str, data: &[([f32; 2], usize)]) {
     let class_names = ["cat", "lion", "cheetah"];
     println!("{}:", name);
@@ -84,26 +140,65 @@ fn print_dataset(name: &str, data: &[([f32; 2], usize)]) {
     }
 }
 
-/// Converts our raw Vec of (point, label) into:
-/// - a Matrix of shape (N x 2) for the inputs  — what models call X
-/// - a Vec<usize> of labels                     — what models call y
-/// 
-/// This is the format every model in the project will expect
+/// Prints predicted vs actual label for every sample
+fn print_predictions(predictions: &[usize], labels: &[usize]) {
+    let class_names = ["cat", "lion", "cheetah"];
+    for i in 0..predictions.len() {
+        let status = if predictions[i] == labels[i] { "OK" } else { "KO" };
+        println!(
+            "  Sample {:>2} | predicted: {:>7} | actual: {:>7} | {}",
+            i,
+            class_names[predictions[i]],
+            class_names[labels[i]],
+            status
+        );
+    }
+}
+
+/// Prints only the samples the linear model got wrong
+/// These are the KO cases that transform.rs will address
+fn print_ko_cases(predictions: &[usize], labels: &[usize], data: &[([f32; 2], usize)]) {
+    let class_names = ["cat", "lion", "cheetah"];
+    let mut ko_count = 0;
+
+    for i in 0..predictions.len() {
+        if predictions[i] != labels[i] {
+            ko_count += 1;
+            println!(
+                "  KO sample {:>2} | point [{:.2}, {:.2}] | predicted: {:>7} | actual: {:>7}",
+                i,
+                data[i].0[0],
+                data[i].0[1],
+                class_names[predictions[i]],
+                class_names[labels[i]]
+            );
+        }
+    }
+
+    if ko_count == 0 {
+        println!("  No KO cases — linear model solved this dataset perfectly.");
+    } else {
+        println!("\n  Total KO cases: {}/{}", ko_count, predictions.len());
+    }
+}
+
+/// Converts raw Vec of (point, label) into a Matrix (N x 2) and a Vec<usize> of labels
 fn to_matrix(data: &[([f32; 2], usize)]) -> (Matrix, Vec<usize>) {
     let rows = data.len();
-    let cols = 2; // x and y coordinates
+    let cols = 2;
 
     // Flatten all points into a single Vec<f32> row by row
-    // like numpy.array([p for p, _ in data]).flatten()
-    let flat: Vec<f32> = data
-        .iter()
-        .flat_map(|(point, _)| point.iter().copied())
-        .collect();
+    let mut flat = Vec::new();
+    for (point, _) in data {
+        flat.push(point[0]);
+        flat.push(point[1]);
+    }
 
-    let labels: Vec<usize> = data
-        .iter()
-        .map(|(_, label)| *label)
-        .collect();
+    // Collect labels into a separate Vec
+    let mut labels = Vec::new();
+    for (_, label) in data {
+        labels.push(*label);
+    }
 
     (Matrix::from_vec(flat, rows, cols), labels)
 }
