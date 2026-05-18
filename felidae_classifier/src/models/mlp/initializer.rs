@@ -1,6 +1,6 @@
 // src/models/mlp/initializer.rs
 
-use cargo::tensor::Matrix;
+use crate::tensor::Matrix;
 use rand::RngExt;
 
 pub fn he_init(n_inputs: usize, n_outputs: usize) -> Matrix {

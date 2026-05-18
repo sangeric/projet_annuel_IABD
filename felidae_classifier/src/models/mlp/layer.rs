@@ -1,7 +1,7 @@
 // src/models/mlp/layer.rs
 
-use cargo::tensor::Matrix;
-use cargo::models::mlp::initializer::he_init;
+use crate::tensor::Matrix;
+use crate::models::mlp::initializer::he_init;
 
 #[derive(Debug, Clone)]
 pub struct Layer {
