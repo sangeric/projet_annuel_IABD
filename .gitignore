@@ -1,4 +1,4 @@
 .env
-dataset
+felidae_classifier/dataset
 felidae_classifier/lazy.nvim
 felidae_classifier/target
