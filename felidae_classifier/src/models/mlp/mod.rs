@@ -4,8 +4,8 @@ pub mod activation;
 pub mod initializer;
 pub mod layer;
 
-use crate::tensor::Matrix;
-use crate::models::mlp::layer::Layer;
+// use crate::tensor::Matrix;
+// use crate::models::mlp::layer::Layer;
 use rand::RngExt;
 
 pub struct MLP {

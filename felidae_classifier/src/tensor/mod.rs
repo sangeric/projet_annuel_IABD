@@ -45,6 +45,7 @@ impl Matrix {
         self.data[row * self.cols + col] = val;
     }
 
+
     /// Matrix multiplication (dot product) — self is (M x K), rhs is (K x N), result is (M x N)
     /// Like numpy.dot(a, b) or a @ b
     pub fn dot(&self, rhs: &Matrix) -> Matrix {
@@ -167,6 +168,48 @@ impl Matrix {
             }
         }
 
+        result
+    }
+
+    pub fn inverse(&self) -> Matrix {
+        assert_eq!(self.rows, self.cols, "Matrix must be square to invert");
+        let n = self.rows;
+
+        let mut aug = Matrix::zeros(n, n * 2);
+        for i in 0..n {
+            for j in 0..n {
+                aug.set(i, j, self.get(i, j));
+            }
+            aug.set(i, i + n, 1.0);
+        }
+
+        for col in 0..n {
+            // on cherche le pivot
+            let pivot = aug.get(col, col);
+            assert!(pivot.abs() > 1e-10, "Matrix is singular, cannot invert");
+
+            for j in 0..n * 2 {
+                let val = aug.get(col, j) / pivot;
+                aug.set(col, j, val);
+            }
+
+            for row in 0..n {
+                if row != col {
+                    let factor = aug.get(row, col);
+                    for j in 0..n * 2 {
+                        let val = aug.get(row, j) - factor * aug.get(col, j);
+                        aug.set(row, j, val);
+                    }
+                }
+            }
+        }
+
+        let mut result = Matrix::zeros(n, n);
+        for i in 0..n {
+            for j in 0..n {
+                result.set(i, j, aug.get(i, j + n));
+            }
+        }
         result
     }
 }
