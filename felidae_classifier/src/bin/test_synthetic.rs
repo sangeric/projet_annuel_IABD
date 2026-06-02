@@ -333,6 +333,40 @@ fn main() {
     println!("MSE: {:.6}", mse);
     println!("MAE: {:.6}", mae);
     */
+
+
+    // ----------------------------------------------------------------
+    // MLP ON DATASET 1 — linearly separable
+    // Network: 2 inputs → 8 hidden → 8 hidden → 3 classes
+    // Tanh activation throughout (as per the course slides)
+    // ----------------------------------------------------------------
+    println!("\n=== MLP on Dataset 1 (linearly separable) ===\n");
+
+    use felidae_classifier::models::mlp::MLP;
+    use felidae_classifier::models::mlp::activation::{tanh, tanh_derivative};
+
+    let mut mlp1 = MLP::new(&[2, 8, 8, 3], tanh, tanh_derivative, tanh, tanh_derivative);
+    mlp1.train(&x_linear, &y_linear, 5000, 0.05);
+
+    let mlp_preds1 = mlp1.predict(&x_linear);
+    println!("\nResults:");
+    print_predictions(&mlp_preds1, &y_linear);
+    println!("Final accuracy: {:.1}%", mlp1.accuracy(&x_linear, &y_linear) * 100.0);
+
+    // ----------------------------------------------------------------
+    // MLP ON DATASET 2 — non-linearly separable (the KO cases)
+    // The MLP should handle this naturally thanks to its hidden layers,
+    // unlike the raw linear model which got stuck
+    // ----------------------------------------------------------------
+    println!("\n=== MLP on Dataset 2 (non-linearly separable) ===\n");
+
+    let mut mlp2 = MLP::new(&[2, 8, 8, 3], tanh, tanh_derivative, tanh, tanh_derivative);
+    mlp2.train(&x_nonlinear, &y_nonlinear, 5000, 0.05);
+
+    let mlp_preds2 = mlp2.predict(&x_nonlinear);
+    println!("\nResults:");
+    print_predictions(&mlp_preds2, &y_nonlinear);
+    println!("Final accuracy: {:.1}%", mlp2.accuracy(&x_nonlinear, &y_nonlinear) * 100.0);
 }
 
 /// Pretty-prints a dataset

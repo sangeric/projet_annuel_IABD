@@ -1,6 +1,14 @@
 // src/models/mlp/activation.rs
 
-use cargo::tensor::Matrix;
+use crate::tensor::Matrix;
+
+pub fn tanh(x: f32) -> f32 {
+    x.tanh()
+}
+
+pub fn tanh_derivative(x: f32) -> f32 {
+    1.0 - (x.tanh() * x.tanh())
+}
 
 pub fn relu(x: f32) -> f32 {
     if x <= 0.0 { 0.0 } else { x }
@@ -9,8 +17,6 @@ pub fn relu(x: f32) -> f32 {
 pub fn relu_derivative(x: f32) -> f32 {
     if x <= 0.0 { 0.0 } else { 1.0 }
 }
-
-
 
 /// Softmax — converts raw scores into probabilities
 /// Each row sums to 1.0, like a probability distribution over classes
@@ -40,7 +46,7 @@ pub fn softmax(matrix: &Matrix) -> Matrix {
         }
 
         // Divide each exp by the sum — now the row sums to 1.0
-        for j in 0..matri.cols {
+        for j in 0..matrix.cols {
             result.set(i, j, exps[j] / sum);
         }
     }
