@@ -1,4 +1,4 @@
-// src/models/mlp/mod.r
+// src/models/mlp/mod.rs
 
 pub mod activation;
 pub mod initializer;
