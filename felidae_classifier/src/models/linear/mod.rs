@@ -4,6 +4,7 @@ use crate::tensor::Matrix;
 use rand::RngExt;
 
 pub mod transform;
+mod regression;
 
 /// A linear classifier: output = X · W + b
 /// Trained with softmax + cross-entropy loss via gradient descent
@@ -17,6 +18,12 @@ pub struct LinearClassifier {
     /// Learning rate for gradient descent
     learning_rate: f32,
 }
+
+pub struct Regression{
+    weights: Matrix,
+}
+
+
 
 impl LinearClassifier {
     /// Creates a new LinearClassifier with small random weights
