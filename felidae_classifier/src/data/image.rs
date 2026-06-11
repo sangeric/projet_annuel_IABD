@@ -38,7 +38,11 @@ impl LoadedImage {
     }
 
     pub fn get_pixel(&self, x: u32, y: u32) -> (f32, f32, f32) {
-        let index = ((y * self.width + x) * 2) as usize;
-        (self.pixels[index], self.pixels[index + 1], self.pixels[index + 2])
+        let index = ((y * self.width + x) * 3) as usize;
+        (
+            self.pixels[index],
+            self.pixels[index + 1],
+            self.pixels[index + 2],
+        )
     }
 }

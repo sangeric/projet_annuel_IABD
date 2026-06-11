@@ -212,6 +212,7 @@ mod tests {
     fn test_uniform_image_means() {
         let img = make_uniform_image(1.0, 0.0, 0.0);
         let features = extract(&img);
+        println!("features[0..6] = {:?}", &features[0..6]);   // ← add this
         assert!((features[0] - 1.0).abs() < 1e-5);
         assert!((features[1] - 0.0).abs() < 1e-5);
         assert!((features[2] - 0.0).abs() < 1e-5);

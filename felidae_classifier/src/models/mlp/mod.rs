@@ -4,9 +4,11 @@ pub mod activation;
 pub mod initializer;
 pub mod layer;
 
-// use crate::tensor::Matrix;
-// use crate::models::mlp::layer::Layer;
-use rand::RngExt;
+use crate::tensor::Matrix;
+use crate::models::mlp::layer::Layer;
+use crate::training::loss::mse_loss;
+use crate::training::shuffle::shuffled_indices;
+use tensorboard_rs::summary_writer::SummaryWriter;
 
 pub struct MLP {
     layers: Vec<Layer>,
@@ -137,28 +139,50 @@ impl MLP {
         correct as f32 / labels.len() as f32
     }
 
-    pub fn train(&mut self, x: &Matrix, labels: &[usize], epochs: usize, learning_rate: f32) {
-        let mut rng = rand::rng();
-        
+    pub fn train(&mut self, x_train: &Matrix, y_train: &[usize], x_test: &Matrix, y_test: &[usize], epochs: usize, learning_rate: f32) {
+        let mut writer = SummaryWriter::new(&"./runs/logdir".to_string());
+        let n_classes = self.layers[self.layers.len() - 1].biases.cols;
+
         for epoch in 0..epochs {
-            let i = rng.random_range(0..x.rows);
-            
-            let mut sample_data = Vec::new();
+            let order = shuffled_indices(x_train.rows, epoch as u64);
 
-            for j in 0..x.cols {
-                sample_data.push(x.get(i, j));
+            let mut total_loss = 0.0_f32;
+
+            for &i in &order {
+                let mut sample_data = Vec::new();
+                for j in 0..x_train.cols {
+                    sample_data.push(x_train.get(i, j));
+                }
+                let sample = Matrix::from_vec(sample_data, 1, x_train.cols);
+
+                let cache = self.forward_with_cache(&sample);
+
+                // Compute loss for this sample
+                let output = &cache[cache.len() - 1];
+                let mut expected_data = Vec::new();
+                for j in 0..n_classes {
+                    if j == y_train[i] {
+                        expected_data.push(1.0_f32);
+                    } else {
+                        expected_data.push(-1.0_f32);
+                    }
+                }
+                let expected = Matrix::from_vec(expected_data, 1, n_classes);
+                total_loss += mse_loss(output, &expected);
+
+                self.backward(&cache, y_train[i], learning_rate);
             }
 
-            let sample = Matrix::from_vec(sample_data, 1, x.cols);
+            let avg_loss = total_loss / x_train.rows as f32;
+            let train_acc = self.accuracy(x_train, y_train);
+            let test_acc = self.accuracy(x_test, y_test);
 
-            let cache = self.forward_with_cache(&sample);
+            writer.add_scalar("loss", avg_loss, epoch);
+            writer.add_scalar("train_accuracy", train_acc, epoch);
+            writer.add_scalar("test_accuracy", test_acc, epoch);
+            writer.flush();
 
-            self.backward(&cache, labels[i], learning_rate);
-
-            if epoch % 100 == 0 {
-                let acc = self.accuracy(x, labels);
-                println!("Epoch {:>4} | Accuracy: {:.1}%", epoch, acc * 100.0);
-            }
+            println!("Epoch {:>3} | Loss: {:.4} | Train: {:.1}% | Test: {:.1}%", epoch, avg_loss, train_acc * 100.0, test_acc * 100.0);
         }
     }
 }
@@ -198,7 +222,6 @@ mod tests {
 
     #[test]
     fn test_forward_with_cache_length() {
-        // cache should have 1 entry per layer + 1 for the input
         let mlp = MLP::new(&[2, 16, 8, 3], tanh, tanh_derivative, tanh, tanh_derivative);
         let (x, _) = make_simple_data();
         let cache = mlp.forward_with_cache(&x);
@@ -208,7 +231,6 @@ mod tests {
 
     #[test]
     fn test_forward_with_cache_first_is_input() {
-        // cache[0] must be the original input unchanged
         let mlp = MLP::new(&[2, 16, 8, 3], tanh, tanh_derivative, tanh, tanh_derivative);
         let (x, _) = make_simple_data();
         let cache = mlp.forward_with_cache(&x);
@@ -226,7 +248,6 @@ mod tests {
 
     #[test]
     fn test_predict_returns_valid_classes() {
-        // every prediction must be a valid class index (0, 1 or 2)
         let mlp = MLP::new(&[2, 16, 8, 3], tanh, tanh_derivative, tanh, tanh_derivative);
         let (x, _) = make_simple_data();
         let preds = mlp.predict(&x);
@@ -237,10 +258,12 @@ mod tests {
 
     #[test]
     fn test_train_improves_accuracy() {
-        // on 3 clearly separated points the MLP should reach 100%
+        // On 3 clearly separated points the MLP should reach 100% train accuracy.
+        // We reuse the same data as both training and test set here — the goal is
+        // to verify learning works, not to measure generalization.
         let mut mlp = MLP::new(&[2, 16, 8, 3], tanh, tanh_derivative, tanh, tanh_derivative);
         let (x, y) = make_simple_data();
-        mlp.train(&x, &y, 5000, 0.05);
+        mlp.train(&x, &y, &x, &y, 50, 0.05);
         assert_eq!(mlp.accuracy(&x, &y), 1.0);
     }
 

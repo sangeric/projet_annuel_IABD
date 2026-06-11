@@ -1,18 +1,20 @@
 // src/bin/test_real.rs
 
-use felidae_classifier::data::load_dataset;
+// use felidae_classifier::data::load_dataset;
 use felidae_classifier::features::scaler::StandardScaler;
-use felidae_classifier::features::extract::extract;
-// To use raw pixels instead, swap the line above for:
-// use felidae_classifier::features::flatten::flatten;
+use felidae_classifier::features::flatten::flatten;
+// To use features instead, swap the line above for the following line :
+// use felidae_classifier::features::extract::extract;
 use felidae_classifier::models::mlp::MLP;
 use felidae_classifier::models::mlp::activation::{tanh, tanh_derivative};
+use felidae_classifier::data::load_or_build;
+use felidae_classifier::training::metrics::{confusion_matrix, print_confusion_matrix};
 
 fn main() {
     println!("=== Real Dataset Classification ===\n");
 
     println!("--- Loading dataset ---");
-    let dataset = match load_dataset("dataset", Some(3000), extract) {
+    let dataset = match load_or_build("cache/dataset_extract_3000.bin", "dataset", Some(3000), flatten) {
         Ok(ds) => ds,
         Err(e) => {
             eprintln!("Failed to load dataset: {}", e);
@@ -40,7 +42,7 @@ fn main() {
 
     println!("\n=== MLP ===\n");
 
-    let architecture = &[n_features, 16, 16, n_classes];
+    let architecture = &[n_features, 16, n_classes];
     println!("Architecture: {:?}", architecture);
 
     let mut mlp = MLP::new(
@@ -51,10 +53,10 @@ fn main() {
         tanh_derivative,
     );
 
-    let epochs = 10_000;
-    let lr = 0.01;
-    println!("Training {} epochs at learning rate {}\n", epochs, lr);
-    mlp.train(&x_train, &train_ds.labels, epochs, lr);
+    let epochs = 100;
+    let learning_rate = 0.01;
+    println!("Training {} epochs at learning rate {}\n", epochs, learning_rate);
+    mlp.train(&x_train, &train_ds.labels, &x_test, &test_ds.labels, epochs, learning_rate);
 
     let train_acc = mlp.accuracy(&x_train, &train_ds.labels);
     let test_acc = mlp.accuracy(&x_test, &test_ds.labels);
@@ -63,4 +65,10 @@ fn main() {
         train_acc * 100.0,
         test_acc * 100.0,
     );
+
+    let predictions = mlp.predict(&x_test);
+    let matrix = confusion_matrix(&predictions, &test_ds.labels, n_classes);
+
+    println!("\n=== Confusion Matrix on Test Set ===\n");
+    print_confusion_matrix(&matrix, &dataset.class_names);
 }

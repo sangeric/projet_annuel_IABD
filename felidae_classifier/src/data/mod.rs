@@ -5,10 +5,10 @@ pub mod augment;
 
 use crate::tensor::Matrix;
 use crate::data::image::LoadedImage;
-use rand::RngExt;
-use rand::SeedableRng;
-use rand::rngs::StdRng;
+use crate::training::shuffle::shuffled_indices;
 use std::fs;
+use std::io::{Read, Write};
+use std::fs::File;
 
 pub struct Dataset {
     pub x: Matrix,
@@ -25,18 +25,122 @@ impl Dataset {
         self.class_names.len()
     }
 
+    pub fn save(&self, path: &str) -> Result<(), String> {
+        let mut file = match File::create(path) {
+            Ok(f) => f,
+            Err(e) => return Err(format!("Failed to create {}: {}", path, e)),
+        };
+
+        let n_samples = self.x.rows as u32;
+        let n_features = self.x.cols as u32;
+        let n_classes = self.class_names.len() as u32;
+
+        // Header
+        if let Err(e) = file.write_all(&n_samples.to_le_bytes()) {
+            return Err(format!("write failed: {}", e));
+        }
+        if let Err(e) = file.write_all(&n_features.to_le_bytes()) {
+            return Err(format!("write failed: {}", e));
+        }
+        if let Err(e) = file.write_all(&n_classes.to_le_bytes()) {
+            return Err(format!("write failed: {}", e));
+        }
+
+        // Class names — each preceded by its byte length
+        for name in &self.class_names {
+            let bytes = name.as_bytes();
+            let len = bytes.len() as u32;
+            if let Err(e) = file.write_all(&len.to_le_bytes()) {
+                return Err(format!("write failed: {}", e));
+            }
+            if let Err(e) = file.write_all(bytes) {
+                return Err(format!("write failed: {}", e));
+            }
+        }
+
+        // Labels
+        for &label in &self.labels {
+            let l = label as u32;
+            if let Err(e) = file.write_all(&l.to_le_bytes()) {
+                return Err(format!("write failed: {}", e));
+            }
+        }
+
+        // Feature matrix — written as a single big block of bytes
+        for &value in &self.x.data {
+            if let Err(e) = file.write_all(&value.to_le_bytes()) {
+                return Err(format!("write failed: {}", e));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn load(path: &str) -> Result<Dataset, String> {
+        let mut file = match File::open(path) {
+            Ok(f) => f,
+            Err(e) => return Err(format!("Failed to open {}: {}", path, e)),
+        };
+
+        // Small helpers to read fixed-size primitives
+        let read_u32 = |file: &mut File| -> Result<u32, String> {
+            let mut buf = [0u8; 4];
+            if let Err(e) = file.read_exact(&mut buf) {
+                return Err(format!("read failed: {}", e));
+            }
+            Ok(u32::from_le_bytes(buf))
+        };
+        let read_f32 = |file: &mut File| -> Result<f32, String> {
+            let mut buf = [0u8; 4];
+            if let Err(e) = file.read_exact(&mut buf) {
+                return Err(format!("read failed: {}", e));
+            }
+            Ok(f32::from_le_bytes(buf))
+        };
+
+        // Header
+        let n_samples = read_u32(&mut file)? as usize;
+        let n_features = read_u32(&mut file)? as usize;
+        let n_classes = read_u32(&mut file)? as usize;
+
+        // Class names
+        let mut class_names = Vec::new();
+        for _ in 0..n_classes {
+            let len = read_u32(&mut file)? as usize;
+            let mut bytes = vec![0u8; len];
+            if let Err(e) = file.read_exact(&mut bytes) {
+                return Err(format!("read failed: {}", e));
+            }
+            match String::from_utf8(bytes) {
+                Ok(s) => class_names.push(s),
+                Err(e) => return Err(format!("invalid utf8 in class name: {}", e)),
+            }
+        }
+
+        // Labels
+        let mut labels = Vec::with_capacity(n_samples);
+        for _ in 0..n_samples {
+            labels.push(read_u32(&mut file)? as usize);
+        }
+
+        // Feature data
+        let mut x_data = Vec::with_capacity(n_samples * n_features);
+        for _ in 0..(n_samples * n_features) {
+            x_data.push(read_f32(&mut file)?);
+        }
+
+        Ok(Dataset {
+            x: Matrix::from_vec(x_data, n_samples, n_features),
+            labels,
+            class_names,
+        })
+    }
+
     // Splits this dataset into a training and test set.
     // Same RNG seed -> same split, for reproducible reports.
     pub fn train_test_split(&self, test_ratio: f32, seed: u64) -> (Dataset, Dataset) {
         let n = self.len();
-        let mut indices: Vec<usize> = (0..n).collect();
-        let mut rng = StdRng::seed_from_u64(seed);
-
-        // Fisher–Yates shuffle
-        for i in (1..n).rev() {
-            let j = rng.random_range(0..=i);
-            indices.swap(i, j);
-        }
+        let indices = shuffled_indices(n, seed);
 
         let n_test = (n as f32 * test_ratio) as usize;
         let n_features = self.x.cols;
@@ -75,6 +179,37 @@ impl Dataset {
 
         (train, test)
     }
+}
+
+pub fn load_or_build(
+    cache_path: &str,
+    root: &str,
+    samples_per_class: Option<usize>,
+    feature_extractor: fn(&LoadedImage) -> Vec<f32>,
+) -> Result<Dataset, String> {
+    // Try the cache first
+    match Dataset::load(cache_path) {
+        Ok(ds) => {
+            println!("Loaded dataset from cache: {}", cache_path);
+            return Ok(ds);
+        }
+        Err(_) => {
+            println!("No cache at {}, building from images...", cache_path);
+        }
+    }
+
+    // Cache miss — build from scratch
+    let dataset = load_dataset(root, samples_per_class, feature_extractor)?;
+
+    // Try to write the cache. If it fails (e.g. directory doesn't exist),
+    // log a warning but still return the dataset — caching is an optimization,
+    // not a requirement.
+    match dataset.save(cache_path) {
+        Ok(_) => println!("Saved dataset to cache: {}", cache_path),
+        Err(e) => eprintln!("Warning: failed to save cache: {}", e),
+    }
+
+    Ok(dataset)
 }
 
 /// Loads an image-classification dataset from a folder structure.
