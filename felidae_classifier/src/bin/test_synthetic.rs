@@ -1,10 +1,8 @@
 // src/bin/test_synthetic.rs
 
-use std::cmp::max;
-use std::ffi::c_void;
 use felidae_classifier::tensor::Matrix;
 use felidae_classifier::models::linear::LinearClassifier;
-use felidae_classifier::models::perceptron::Rosenblatt;
+use felidae_classifier::models::perceptron::{Rosenblatt, RosenblattClassifier};
 use felidae_classifier::models::linear::Regression;
 
 
@@ -177,85 +175,27 @@ fn main() {
     );
     let nb_features = x_linear_rosen.cols;
 
-
-
     println!("\n=== Linear Classifier on Dataset 1 (linearly separable) ===\n");
-    let mut cat_perceptron_linear = Rosenblatt::new(nb_features,0.01, 1.0, 0, 500);
-    let mut lion_perceptron_linear = Rosenblatt::new(nb_features,0.01, 1.0, 1, 1000);
-    let mut cheetah_perceptron_linear = Rosenblatt::new(nb_features,0.01, 1.0, 2, 2000);
-    println!("Cat :");
-    cat_perceptron_linear.train(&x_linear_rosen, &y_linear_rosen, 500);
-    println!();
-    println!("Lion :");
-    lion_perceptron_linear.train(&x_linear_rosen, &y_linear_rosen, 500);
-    println!();
-    println!("Cheetah :");
-    cheetah_perceptron_linear.train(&x_linear_rosen, &y_linear_rosen, 500);
-    println!();
-    let cat_prediction_linear = cat_perceptron_linear.predict(&x_linear_rosen);
-    let lion_prediction_linear = lion_perceptron_linear.predict(&x_linear_rosen);
-    let cheetah_prediction_linear = cheetah_perceptron_linear.predict(&x_linear_rosen);
 
-    println!("\n\nResult\n");
-    let tab_argmax:Vec<usize> = argmax(cat_prediction_linear, lion_prediction_linear, cheetah_prediction_linear);
-    Rosenblatt::print_prediction_result(tab_argmax, &y_linear_rosen);
-
+    let mut linear_rosen = RosenblattClassifier::new(nb_features, 0.01, 1.0,1.0,1.0,500);
+    linear_rosen.train(&x_linear_rosen, &y_linear_rosen ,500);
+    linear_rosen.predict(&x_linear_rosen, &y_linear_rosen);
 
 
     println!("\n=== Linear Classifier on Dataset 2 (non-linearly separable) ===\n");
-    let mut cat_perceptron_non_linear = Rosenblatt::new(nb_features,0.01, 1.0, 0, 500);
-    let mut lion_perceptron_non_linear = Rosenblatt::new(nb_features,0.01, 1.0, 1, 1000);
-    let mut cheetah_perceptron_non_linear = Rosenblatt::new(nb_features,0.01, 1.0, 2, 2000);
-
-    println!("Cat :");
-    cat_perceptron_non_linear.train(&x_nonlinear_rosen, &y_nonlinear_rosen, 500);
-    println!();
-    println!("Lion :");
-    lion_perceptron_non_linear.train(&x_nonlinear_rosen, &y_nonlinear_rosen, 500);
-    println!();
-    println!("Cheetah :");
-    cheetah_perceptron_non_linear.train(&x_nonlinear_rosen, &y_nonlinear_rosen, 500);
-    println!();
-    println!("cat weights {:?}", cat_perceptron_non_linear.get_weight());
-    println!("lion weights {:?}", lion_perceptron_non_linear.get_weight());
-    println!("cheetah weights {:?}\n\n", cheetah_perceptron_non_linear.get_weight());
-
-    let cat_perceptron_non_linear = cat_perceptron_non_linear.predict(&x_nonlinear_rosen);
-    let lion_perceptron_non_linear = lion_perceptron_non_linear.predict(&x_nonlinear_rosen);
-    let cheetah_perceptron_non_linear = cheetah_perceptron_non_linear.predict(&x_nonlinear_rosen);
-
-    println!("{:?}\n {:?}\n {:?}", cat_perceptron_non_linear, lion_perceptron_non_linear, cheetah_perceptron_non_linear);
-    println!("\n\nResult\n");
-    let tab_argmax:Vec<usize> = argmax(cat_perceptron_non_linear, lion_perceptron_non_linear, cheetah_perceptron_non_linear);
-    Rosenblatt::print_prediction_result(tab_argmax, &y_nonlinear_rosen);
-
-
+    let mut non_linear_rosen = RosenblattClassifier::new(nb_features, 0.01, 1.0,1.0,1.0,500);
+    non_linear_rosen.train(&x_nonlinear_rosen, &y_nonlinear_rosen ,500);
+    non_linear_rosen.predict(&x_nonlinear_rosen, &y_nonlinear_rosen);
 
 
     println!("\n=== Linear Classifier + Transform on Dataset 2 ===\n");
-    let nb_deg2 = 5;
-    let mut cat_perceptron_non_linear_transform = Rosenblatt::new(nb_deg2,0.01, 1.0, 0, 500);
-    let mut lion_perceptron_non_linear_transform = Rosenblatt::new(nb_deg2,0.01, 1.0, 1, 1000);
-    let mut cheetah_perceptron_non_linear_transform = Rosenblatt::new(nb_deg2,0.01, 1.0, 2, 2000);
-    println!("{:?}", cat_perceptron_non_linear_transform.get_weight());
-    //transformer x_nonlinear_rosen pour la transformation
-    let mut x_cat_transform = cat_perceptron_non_linear_transform.transform(&x_nonlinear_rosen, y_nonlinear_rosen.len());
-    let mut x_lion_transform = lion_perceptron_non_linear_transform.transform(&x_nonlinear_rosen,  y_nonlinear_rosen.len());
-    let mut x_cheetah_transform = cheetah_perceptron_non_linear_transform.transform(&x_nonlinear_rosen,  y_nonlinear_rosen.len());
+    let nb_deg2 = x_nonlinear_rosen.cols*2+1;
 
-    cat_perceptron_non_linear_transform.train(&x_cat_transform, &y_nonlinear_rosen, 500);
-    lion_perceptron_non_linear_transform.train(&x_lion_transform, &y_nonlinear_rosen, 500);
-    cheetah_perceptron_non_linear_transform.train(&x_cheetah_transform, &y_nonlinear_rosen, 500);
-
-
-    let cat_perceptron_transform = cat_perceptron_non_linear_transform.predict(&x_cat_transform);
-    let lion_perceptron_transform = lion_perceptron_non_linear_transform.predict(&x_lion_transform);
-    let cheetah_perceptron_transform = cheetah_perceptron_non_linear_transform.predict(&x_cheetah_transform);
-
-    println!("\n\nResult\n");
-    let tab_argmax_transform :Vec<usize> = argmax(cat_perceptron_transform, lion_perceptron_transform, cheetah_perceptron_transform);
-    println!("tab arg max {:?}", tab_argmax_transform);
-    Rosenblatt::print_prediction_result(tab_argmax_transform, &y_nonlinear_rosen);
+    let mut non_linear_transform_rosen = RosenblattClassifier::new(nb_deg2, 0.01, 1.0, 1.0, 1.0 , 500);
+    let x_non_linear_transform = non_linear_transform_rosen.transform(&x_nonlinear_rosen);
+    println!("x transformed {:?}", x_non_linear_transform);
+    non_linear_transform_rosen.train(&x_non_linear_transform, &y_nonlinear_rosen, 500);
+    non_linear_transform_rosen.predict(&x_non_linear_transform, &y_nonlinear_rosen);
 
 
 
@@ -335,6 +275,7 @@ fn main() {
     */
 
 
+
     // ----------------------------------------------------------------
     // MLP ON DATASET 1 — linearly separable
     // Network: 2 inputs → 8 hidden → 8 hidden → 3 classes
@@ -367,6 +308,8 @@ fn main() {
     println!("\nResults:");
     print_predictions(&mlp_preds2, &y_nonlinear);
     println!("Final accuracy: {:.1}%", mlp2.accuracy(&x_nonlinear, &y_nonlinear) * 100.0);
+
+
 }
 
 /// Pretty-prints a dataset
@@ -476,29 +419,8 @@ fn to_matrix_regression(data: &[([f32; 2], f32)]) -> (Matrix, Matrix) {
 }
 
 
-fn argmax(cat : Vec<f32>, lion : Vec<f32>, cheetah : Vec<f32>) -> Vec<usize>{
-    let mut argmax = Vec::new();
 
-    for i in 0..cat.len() {
-        let scores = [cat[i], lion[i],cheetah[i]];
-        let mut max = max_argmax(scores);
-        argmax.push(max);
-    }
 
-    argmax
-}
-
-fn max_argmax(scores: [f32; 3]) -> usize{
-    let mut index_max : usize = 0;
-    let mut max : f32 = scores[0];
-    for i in 1..scores.len(){
-        if max < scores[i]{
-            max = scores[i];
-            index_max = i;
-        }
-    }
-    index_max
-}
 
 
 pub fn mse(y_true: &Matrix, y_pred: &Matrix) -> f32 {

@@ -2,3 +2,7 @@
 felidae_classifier/dataset
 felidae_classifier/lazy.nvim
 felidae_classifier/target
+.idea
+felidae_classifier/.idea
+python_client/.venv
+python_client/.ipynb_checkpoints

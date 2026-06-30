@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "felidae_classifier"
-crate-type = ["lib"]
+crate-type = ["cdylib", "lib"]
 
 [[bin]]
 name = "server"

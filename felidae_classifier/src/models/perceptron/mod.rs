@@ -1,12 +1,16 @@
 use crate::tensor::Matrix;
-use rand::RngExt;
 mod rosenblatt;
+mod rosenblatt_classifier;
 
-use rand::SeedableRng;
 //classification model perceptron
 pub struct Rosenblatt {
     learning_rate: f32,
-    target_class: usize,
     weights: Matrix,
     bias:f32,
+}
+
+pub struct RosenblattClassifier{
+    cat : Rosenblatt,
+    lion : Rosenblatt,
+    cheetah : Rosenblatt,
 }

@@ -3,10 +3,11 @@
 pub mod activation;
 pub mod initializer;
 pub mod layer;
-
+use crate::tensor::Matrix;
 // use crate::tensor::Matrix;
 // use crate::models::mlp::layer::Layer;
 use rand::RngExt;
+use crate::models::mlp::layer::Layer;
 
 pub struct MLP {
     layers: Vec<Layer>,
