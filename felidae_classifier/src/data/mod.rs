@@ -356,6 +356,20 @@ pub fn load_dataset(
     })
 }
 
+pub fn one_hot_encode(labels: &[usize], n_classes: usize) -> Matrix {
+    let mut data = Vec::new();
+    for &label in labels {
+        for j in 0..n_classes {
+            if j == label {
+                data.push(1.0_f32);
+            } else {
+                data.push(-1.0_f32);
+            }
+        }
+    }
+    Matrix::from_vec(data, labels.len(), n_classes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,5 +444,29 @@ mod tests {
         let (train, test) = ds.train_test_split(0.3, 42);
         assert_eq!(train.class_names, vec!["class_0", "class_1", "class_2"]);
         assert_eq!(test.class_names, vec!["class_0", "class_1", "class_2"]);
+    }
+
+    #[test]
+    fn test_one_hot_encode() {
+        let labels = vec![0, 2, 1];
+        let y = one_hot_encode(&labels, 3);
+
+        assert_eq!(y.rows, 3);
+        assert_eq!(y.cols, 3);
+
+        // Row 0 — label 0 → [+1, -1, -1]
+        assert_eq!(y.get(0, 0),  1.0);
+        assert_eq!(y.get(0, 1), -1.0);
+        assert_eq!(y.get(0, 2), -1.0);
+
+        // Row 1 — label 2 → [-1, -1, +1]
+        assert_eq!(y.get(1, 0), -1.0);
+        assert_eq!(y.get(1, 1), -1.0);
+        assert_eq!(y.get(1, 2),  1.0);
+
+        // Row 2 — label 1 → [-1, +1, -1]
+        assert_eq!(y.get(2, 0), -1.0);
+        assert_eq!(y.get(2, 1),  1.0);
+        assert_eq!(y.get(2, 2), -1.0);
     }
 }

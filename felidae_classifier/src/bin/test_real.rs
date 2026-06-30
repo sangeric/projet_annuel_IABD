@@ -6,8 +6,8 @@ use felidae_classifier::features::flatten::flatten;
 // To use features instead, swap the line above for the following line :
 // use felidae_classifier::features::extract::extract;
 use felidae_classifier::models::mlp::MLP;
-use felidae_classifier::models::mlp::activation::{tanh, tanh_derivative};
 use felidae_classifier::data::load_or_build;
+use felidae_classifier::data::one_hot_encode;
 use felidae_classifier::training::metrics::{confusion_matrix, print_confusion_matrix};
 
 fn main() {
@@ -39,27 +39,23 @@ fn main() {
     let mut scaler = StandardScaler::new();
     let x_train = scaler.fit_transform(&train_ds.x);
     let x_test = scaler.transform(&test_ds.x);
+    let y_train = one_hot_encode(&train_ds.labels, n_classes);
+    let y_test = one_hot_encode(&test_ds.labels, n_classes);
 
     println!("\n=== MLP ===\n");
 
     let architecture = &[n_features, 16, n_classes];
     println!("Architecture: {:?}", architecture);
 
-    let mut mlp = MLP::new(
-        architecture,
-        tanh,
-        tanh_derivative,
-        tanh,
-        tanh_derivative,
-    );
+    let mut mlp = MLP::new(architecture, "tanh", "tanh").unwrap();
 
     let epochs = 100;
     let learning_rate = 0.01;
     println!("Training {} epochs at learning rate {}\n", epochs, learning_rate);
-    mlp.train(&x_train, &train_ds.labels, &x_test, &test_ds.labels, epochs, learning_rate);
+    mlp.train(&x_train, &y_train, &x_test, &y_test, epochs, learning_rate);
 
-    let train_acc = mlp.accuracy(&x_train, &train_ds.labels);
-    let test_acc = mlp.accuracy(&x_test, &test_ds.labels);
+    let train_acc = mlp.accuracy(&x_train, &y_train);
+    let test_acc = mlp.accuracy(&x_test, &y_test);
     println!(
         "\nMLP final results: train accuracy {:.1}% | test accuracy {:.1}%",
         train_acc * 100.0,
