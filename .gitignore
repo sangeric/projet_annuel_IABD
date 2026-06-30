@@ -5,3 +5,7 @@ felidae_classifier/target/
 felidae_classifier/cache/
 felidae_classifier/run/
 felidae_classifier/runs/
+.idea
+felidae_classifier/.idea
+python_client/.venv
+python_client/.ipynb_checkpoints
