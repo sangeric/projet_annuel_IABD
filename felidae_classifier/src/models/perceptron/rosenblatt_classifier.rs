@@ -78,11 +78,9 @@ pub extern "C" fn train_classifier(
     epochs: usize,
 ) {
     unsafe {
-        let classifier = unsafe {
-            match classifier.as_mut() {
-                Some(c) => c,
-                None => return,
-            }
+        let classifier: &mut RosenblattClassifier = match classifier.as_mut() {
+            Some(c) => c,
+            None => return,
         };
         let x_slice = std::slice::from_raw_parts(x, rows * cols);
         let y_slice = std::slice::from_raw_parts(y, y_len);
@@ -103,11 +101,9 @@ pub extern "C" fn predict_classifier(classifier: *mut RosenblattClassifier,
                                  y_len: usize
 )-> *mut usize{
     unsafe{
-        let classifier = unsafe {
-            match classifier.as_mut() {
-                Some(c) => c,
-                None => return std::ptr::null_mut(),
-            }
+        let classifier: &mut RosenblattClassifier = match classifier.as_mut() {
+            Some(c) => c,
+            None => return std::ptr::null_mut(),
         };
 
         let x_slice = std::slice::from_raw_parts(x, rows*cols);
@@ -130,7 +126,7 @@ pub extern "C" fn transforming(classifier: *mut RosenblattClassifier,
                         cols: usize,
 ) -> *mut MatrixFFI{
     unsafe{
-        let classifier = match classifier.as_mut() {
+        let classifier: &mut RosenblattClassifier = match classifier.as_mut() {
             Some(c) => c,
             None => return std::ptr::null_mut(),
         };

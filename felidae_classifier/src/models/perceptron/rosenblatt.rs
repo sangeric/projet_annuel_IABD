@@ -1,7 +1,7 @@
 use rand::RngExt;
 use crate::tensor::Matrix;
 
-use super::{Rosenblatt, RosenblattClassifier};
+use super::Rosenblatt;
 use rand::SeedableRng;
 
 impl Rosenblatt {
@@ -121,7 +121,7 @@ impl Rosenblatt {
         Matrix::from_vec(xk, 1, x_with_bias.cols)
     }
 
-    pub fn fetch_accuracy(epoch:usize, errors: Vec<f32>, nb_sample: f32){
+    pub fn fetch_accuracy(_epoch:usize, errors: Vec<f32>, nb_sample: f32){
         for i in 0..errors.len() {
             println!("Epoch {:>4}-{} | Success: {:>4} | Accuracy: {:>6.2}%", i*100,(i+1)*100, errors[i] , (errors[i] / (nb_sample * 100.0)) * 100.0 );
         }
@@ -230,11 +230,9 @@ pub extern "C" fn train_rosenblatt(
     epochs : usize,
 ) {
     unsafe {
-        let rosenblatt = unsafe {
-            match rosenblatt.as_mut() {
-                Some(c) => c,
-                None => return,
-            }
+        let rosenblatt = match rosenblatt.as_mut() {
+            Some(c) => c,
+            None => return,
         };
         let x_slice = std::slice::from_raw_parts(x, rows * cols);
         let x_matrix = Matrix::from_vec(x_slice.to_vec(), rows, cols);
@@ -249,19 +247,17 @@ pub extern "C" fn train_rosenblatt(
 #[unsafe(no_mangle)]
 pub extern "C" fn predict_rosenblatt(
     rosenblatt: *mut Rosenblatt,
-    X: *const f32,
+    x: *const f32,
     rows: usize,
     cols: usize
 ) -> *mut f32{
     unsafe {
-        let rosenblatt = unsafe {
-            match rosenblatt.as_mut() {
-                Some(c) => c,
-                None => return std::ptr::null_mut(),
-            }
+        let rosenblatt = match rosenblatt.as_mut() {
+            Some(c) => c,
+            None => return std::ptr::null_mut(),
         };
 
-        let x_slice = std::slice::from_raw_parts(X, rows * cols);
+        let x_slice = std::slice::from_raw_parts(x, rows * cols);
 
         let x_matrix = Matrix::from_vec(x_slice.to_vec(),rows, cols);
 
@@ -273,13 +269,13 @@ pub extern "C" fn predict_rosenblatt(
 
 
 #[unsafe(no_mangle)]
-pub extern "C" fn transforming_ros(X: *const f32,
+pub extern "C" fn transforming_ros(x: *const f32,
                                     rows : usize,
                                     cols : usize,
 
 )-> *mut MatrixFFIRos{
     unsafe{
-        let x_vec = std::slice::from_raw_parts(X, rows*cols).to_vec();
+        let x_vec = std::slice::from_raw_parts(x, rows*cols).to_vec();
         let x_matrix = Matrix::from_vec(x_vec, rows, cols);
         let x_transformed = Rosenblatt::transform(&x_matrix);
 

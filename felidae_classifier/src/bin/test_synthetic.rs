@@ -2,8 +2,7 @@
 
 use felidae_classifier::tensor::Matrix;
 use felidae_classifier::models::linear::LinearClassifier;
-use felidae_classifier::models::perceptron::{Rosenblatt, RosenblattClassifier};
-use felidae_classifier::models::linear::Regression;
+use felidae_classifier::models::perceptron::RosenblattClassifier;
 use felidae_classifier::data::one_hot_encode;
 
 
@@ -285,7 +284,6 @@ fn main() {
     println!("\n=== MLP on Dataset 1 (linearly separable) ===\n");
 
     use felidae_classifier::models::mlp::MLP;
-    use felidae_classifier::models::mlp::activation::{tanh, tanh_derivative};
 
     let mut mlp1 = MLP::new(&[2, 8, 8, 3], "tanh", "tanh").expect("failed to build MLP");
     let y_linear_onehot = one_hot_encode(&y_linear, 3);
@@ -307,7 +305,7 @@ fn main() {
     let y_nonlinear_onehot = one_hot_encode(&y_nonlinear, 3);
     mlp2.train(&x_nonlinear, &y_nonlinear_onehot, &x_nonlinear, &y_nonlinear_onehot, 5000, 0.05);
 
-    let mlp_preds2 = mlp2.predict(&x_nonlinear);
+    let _mlp_preds2 = mlp2.predict(&x_nonlinear);
     println!("Final accuracy: {:.1}%", mlp2.accuracy(&x_nonlinear, &y_nonlinear_onehot) * 100.0);
 
 
@@ -325,6 +323,7 @@ fn print_dataset(name: &str, data: &[([f32; 2], usize)]) {
     }
 }
 
+#[allow(dead_code)]
 fn print_dataset_regression(name : &str, data : &[([f32;2], f32)]){
     println!("{}", name);
     for (point, label) in data{
@@ -398,7 +397,7 @@ fn to_matrix(data: &[([f32; 2], usize)]) -> (Matrix, Vec<usize>) {
     (Matrix::from_vec(flat, rows, cols), labels)
 }
 
-
+#[allow(dead_code)]
 fn to_matrix_regression(data: &[([f32; 2], f32)]) -> (Matrix, Matrix) {
     let rows = data.len();
     let cols = 2;
