@@ -149,8 +149,9 @@ impl MLP {
         y_test: &Matrix,
         epochs: usize,
         learning_rate: f32,
+        log_dir: &str,
     ) {
-        let mut writer = SummaryWriter::new(&"./runs/logdir".to_string());
+        let mut writer = SummaryWriter::new(&log_dir.to_string());
 
         for epoch in 0..epochs {
             let order = shuffled_indices(x_train.rows, epoch as u64);
@@ -438,7 +439,7 @@ mod tests {
     fn test_train_improves_accuracy() {
         let mut mlp = MLP::new(&[2, 16, 8, 3], "tanh", "tanh").unwrap();
         let (x, y) = make_simple_data();
-        mlp.train(&x, &y, &x, &y, 50, 0.05);
+        mlp.train(&x, &y, &x, &y, 50, 0.05, "/tmp/test_runs");
         assert_eq!(mlp.accuracy(&x, &y), 1.0);
     }
 
@@ -455,7 +456,7 @@ mod tests {
         // Build a small MLP, train briefly, save, load, compare predictions.
         let mut original = MLP::new(&[2, 4, 3], "tanh", "tanh").unwrap();
         let (x, y) = make_simple_data();
-        original.train(&x, &y, &x, &y, 5, 0.05);
+        original.train(&x, &y, &x, &y, 5, 0.05, "/tmp/test_runs");
 
         let path = "/tmp/test_mlp_roundtrip.bin";
         original.save(path).expect("save failed");

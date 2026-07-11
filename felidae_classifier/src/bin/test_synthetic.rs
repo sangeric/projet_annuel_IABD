@@ -287,7 +287,7 @@ fn main() {
 
     let mut mlp1 = MLP::new(&[2, 8, 8, 3], "tanh", "tanh").expect("failed to build MLP");
     let y_linear_onehot = one_hot_encode(&y_linear, 3);
-    mlp1.train(&x_linear, &y_linear_onehot, &x_linear, &y_linear_onehot, 5000, 0.05);
+    mlp1.train(&x_linear, &y_linear_onehot, &x_linear, &y_linear_onehot, 5000, 0.05, "/tmp/test_synthetic");
 
     let mlp_preds1 = mlp1.predict(&x_linear);
     println!("\nResults:");
@@ -303,7 +303,7 @@ fn main() {
 
     let mut mlp2 = MLP::new(&[2, 8, 8, 3], "tanh", "tanh").expect("failed to build MLP");
     let y_nonlinear_onehot = one_hot_encode(&y_nonlinear, 3);
-    mlp2.train(&x_nonlinear, &y_nonlinear_onehot, &x_nonlinear, &y_nonlinear_onehot, 5000, 0.05);
+    mlp2.train(&x_nonlinear, &y_nonlinear_onehot, &x_nonlinear, &y_nonlinear_onehot, 5000, 0.05, "/tmp/test_synthetic");
 
     let _mlp_preds2 = mlp2.predict(&x_nonlinear);
     println!("Final accuracy: {:.1}%", mlp2.accuracy(&x_nonlinear, &y_nonlinear_onehot) * 100.0);

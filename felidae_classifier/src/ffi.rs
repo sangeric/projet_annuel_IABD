@@ -42,8 +42,17 @@ pub extern "C" fn mlp_train(
     y_cols: usize,
     epochs: usize,
     learning_rate: f32,
+    log_dir: *const c_char,
 ) {
     let mlp = unsafe { &mut *mlp };
+
+    let log_dir = unsafe {
+        if log_dir.is_null() {
+            "./runs/logdir".to_string()
+        } else {
+            CStr::from_ptr(log_dir).to_str().unwrap_or("./runs/logdir").to_string()
+        }
+    };
 
     let x_vec = unsafe { std::slice::from_raw_parts(x_data, x_rows * x_cols).to_vec() };
     let y_vec = unsafe { std::slice::from_raw_parts(y_data, y_rows * y_cols).to_vec() };
@@ -52,7 +61,7 @@ pub extern "C" fn mlp_train(
     let y = Matrix::from_vec(y_vec, y_rows, y_cols);
 
     // No test split from FFI — pass same data for train and test
-    mlp.train(&x, &y, &x, &y, epochs, learning_rate);
+    mlp.train(&x, &y, &x, &y, epochs, learning_rate, &log_dir);
 }
 
 #[no_mangle]
@@ -124,5 +133,32 @@ pub extern "C" fn mlp_load(path: *const c_char) -> *mut MLP {
 pub extern "C" fn mlp_destroy(mlp: *mut MLP) {
     if !mlp.is_null() {
         unsafe { drop(Box::from_raw(mlp)) };
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn extract_features(
+    image_data: *const f32,
+    out: *mut f32,
+    out_len: usize,
+) {
+    use crate::features::extract::extract;
+    use crate::data::image::{LoadedImage, IMAGE_SIZE};
+
+    let n = (IMAGE_SIZE * IMAGE_SIZE * 3) as usize;
+    let pixels = unsafe { std::slice::from_raw_parts(image_data, n).to_vec() };
+
+    let image = LoadedImage {
+        pixels,
+        width: IMAGE_SIZE,
+        height: IMAGE_SIZE,
+    };
+
+    let features = extract(&image);
+
+    unsafe {
+        for i in 0..features.len().min(out_len) {
+            *out.add(i) = features[i];
+        }
     }
 }

@@ -1,5 +1,7 @@
 .env
+venv
 felidae_classifier/dataset/
+felidae_classifier/dataset_clean/
 felidae_classifier/lazy.nvim
 felidae_classifier/target/
 felidae_classifier/cache/
@@ -9,3 +11,5 @@ felidae_classifier/runs/
 felidae_classifier/.idea
 python_client/.venv
 python_client/.ipynb_checkpoints
+runs/
+.ipynb_checkpoints/
