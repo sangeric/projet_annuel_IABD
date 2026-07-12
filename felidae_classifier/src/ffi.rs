@@ -4,8 +4,10 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 
 use crate::models::mlp::MLP;
+use crate::models::rbfn::RBFN;
 use crate::tensor::Matrix;
 
+// MLP
 #[no_mangle]
 pub extern "C" fn mlp_create(
     layer_sizes_ptr: *const u32,
@@ -160,5 +162,96 @@ pub extern "C" fn extract_features(
         for i in 0..features.len().min(out_len) {
             *out.add(i) = features[i];
         }
+    }
+}
+
+
+// RBFN
+#[no_mangle]
+pub extern "C" fn rbfn_train(
+    x_data: *const f32,
+    x_rows: usize,
+    x_cols: usize,
+    y_data: *const f32,
+    y_rows: usize,
+    y_cols: usize,
+    k: usize,
+    gamma: f32,
+    kmeans_iters: usize,
+    seed: u64,
+) -> *mut RBFN {
+    let x_vec = unsafe { std::slice::from_raw_parts(x_data, x_rows * x_cols).to_vec() };
+    let y_vec = unsafe { std::slice::from_raw_parts(y_data, y_rows * y_cols).to_vec() };
+
+    let x = Matrix::from_vec(x_vec, x_rows, x_cols);
+    let y = Matrix::from_vec(y_vec, y_rows, y_cols);
+
+    let model = RBFN::train(&x, &y, k, gamma, kmeans_iters, seed);
+    Box::into_raw(Box::new(model))
+}
+
+#[no_mangle]
+pub extern "C" fn rbfn_train_naive(
+    x_data: *const f32,
+    x_rows: usize,
+    x_cols: usize,
+    y_data: *const f32,
+    y_rows: usize,
+    y_cols: usize,
+    gamma: f32,
+) -> *mut RBFN {
+    let x_vec = unsafe { std::slice::from_raw_parts(x_data, x_rows * x_cols).to_vec() };
+    let y_vec = unsafe { std::slice::from_raw_parts(y_data, y_rows * y_cols).to_vec() };
+    let x = Matrix::from_vec(x_vec, x_rows, x_cols);
+    let y = Matrix::from_vec(y_vec, y_rows, y_cols);
+    let model = RBFN::train_naive(&x, &y, gamma);
+    Box::into_raw(Box::new(model))
+}
+
+#[no_mangle]
+pub extern "C" fn rbfn_predict_classes(
+    model: *const RBFN,
+    x_data: *const f32,
+    x_rows: usize,
+    x_cols: usize,
+    out_predictions: *mut u32,
+) {
+    let model = unsafe { &*model };
+
+    let x_vec = unsafe { std::slice::from_raw_parts(x_data, x_rows * x_cols).to_vec() };
+    let x = Matrix::from_vec(x_vec, x_rows, x_cols);
+
+    let preds = model.predict(&x);
+
+    unsafe {
+        for i in 0..preds.len() {
+            *out_predictions.add(i) = preds[i] as u32;
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rbfn_save(model: *const RBFN, path: *const c_char) -> c_int {
+    let model = unsafe { &*model };
+    let path = unsafe { CStr::from_ptr(path).to_str().unwrap_or("") };
+    match model.save(path) {
+        Ok(_) => 0,
+        Err(_) => -1,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rbfn_load(path: *const c_char) -> *mut RBFN {
+    let path = unsafe { CStr::from_ptr(path).to_str().unwrap_or("") };
+    match RBFN::load(path) {
+        Ok(model) => Box::into_raw(Box::new(model)),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rbfn_destroy(model: *mut RBFN) {
+    if !model.is_null() {
+        unsafe { drop(Box::from_raw(model)) };
     }
 }

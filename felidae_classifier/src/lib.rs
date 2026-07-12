@@ -1,3 +1,5 @@
+// src/lib.rs
+
 pub mod tensor;
 pub mod models;
 pub mod training;

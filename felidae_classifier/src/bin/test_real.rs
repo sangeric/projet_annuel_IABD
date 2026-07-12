@@ -2,8 +2,7 @@
 
 // use felidae_classifier::data::load_dataset;
 use felidae_classifier::features::scaler::StandardScaler;
-//use felidae_classifier::features::flatten::flatten;
-// To use features instead, swap the line above for the following line :
+use felidae_classifier::features::flatten::flatten;
 use felidae_classifier::features::extract::extract;
 use felidae_classifier::models::mlp::MLP;
 use felidae_classifier::data::load_or_build;
@@ -11,10 +10,23 @@ use felidae_classifier::data::one_hot_encode;
 use felidae_classifier::training::metrics::{confusion_matrix, print_confusion_matrix};
 
 fn main() {
-    println!("=== Real Dataset Classification ===\n");
+    let args: Vec<String> = std::env::args().collect();
+    let mode = if args.len() > 1 { args[1].as_str() } else { "extract" };
 
+    println!("=== Real Dataset Classification (mode: {}) ===\n", mode);
     println!("--- Loading dataset ---");
-    let dataset = match load_or_build("cache/dataset_extract_3000.bin", "dataset_clean", Some(3000), extract) {
+
+    let (cache_path, feature_fn): (&str, fn(&felidae_classifier::data::image::LoadedImage) -> Vec<f32>) =
+        match mode {
+            "flatten" => ("cache/dataset_flatten_3000.bin", flatten),
+            "extract" => ("cache/dataset_extract_3000.bin", extract),
+            other => {
+                eprintln!("Unknown mode '{}', use 'extract' or 'flatten'", other);
+                return;
+            }
+        };
+
+    let dataset = match load_or_build(cache_path, "dataset_clean", Some(3000), feature_fn) {
         Ok(ds) => ds,
         Err(e) => {
             eprintln!("Failed to load dataset: {}", e);

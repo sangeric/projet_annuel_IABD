@@ -1,9 +1,29 @@
+"""
+Felidae MLP — hyperparameter experiments for the report.
+
+Runs a series of controlled experiments varying one hyperparameter at a time,
+logs loss / train accuracy / test accuracy to per-experiment TensorBoard folders
+(via the Rust library), and saves every plot as a PNG.
+
+Each experiment writes its TensorBoard event files under:
+    runs/experiments/<experiment_name>/<config_label>/
+
+And each plot is saved under:
+    report_plots/<experiment_name>.png
+
+Run from the PA root:
+    python experiments.py
+"""
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 from cffi import FFI
 from PIL import Image
 
+# ----------------------------------------------------------------------------
+# FFI setup
+# ----------------------------------------------------------------------------
 ffi = FFI()
 ffi.cdef("""
     void* mlp_create(const uint32_t* layer_sizes, size_t n_layers, const char* activation, const char* output_activation);
@@ -16,21 +36,59 @@ ffi.cdef("""
 BASE = os.path.abspath("felidae_classifier")
 lib = ffi.dlopen(os.path.join(BASE, "target/release/libfelidae_classifier.so"))
 
-N_FEATURES = 20
-IMG_SIZE = (32, 32)
+# ----------------------------------------------------------------------------
+# Config
+# ----------------------------------------------------------------------------
+# Input representation:
+#   "extract" -> 20 hand-crafted features via the Rust extract_features pipeline
+#   "flatten" -> raw pixels, resized and (optionally) grayscaled, fed in directly
+# In flatten mode we do NOT call extract_features; the pixels go straight to the model.
+FEATURE_MODE = "extract"     # "extract" or "flatten"
+FLATTEN_DIM = 28             # flatten mode resizes images to FLATTEN_DIM x FLATTEN_DIM
+FLATTEN_GRAYSCALE = True     # grayscale keeps the feature count under the 10% rule
+
+IMG_SIZE = (32, 32)          # extract mode always uses 32x32 RGB (what extract expects)
 DATASET_ROOT = os.path.join(BASE, "dataset_clean")
 CLASS_NAMES = ["Cat", "Lion", "Cheetah"]
+
+if FEATURE_MODE == "extract":
+    N_FEATURES = 20
+elif FEATURE_MODE == "flatten":
+    channels = 1 if FLATTEN_GRAYSCALE else 3
+    N_FEATURES = FLATTEN_DIM * FLATTEN_DIM * channels
+else:
+    raise ValueError(f"Unknown FEATURE_MODE: {FEATURE_MODE}")
+
+print(f"Feature mode: {FEATURE_MODE} ({N_FEATURES} features)")
 
 RUNS_DIR = os.path.abspath("runs/experiments")
 PLOTS_DIR = os.path.abspath("report_plots")
 os.makedirs(RUNS_DIR, exist_ok=True)
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
+# Reproducibility for the numpy-side splits
 np.random.seed(42)
 
 
+# ----------------------------------------------------------------------------
+# Data loading
+# ----------------------------------------------------------------------------
+def features_from_image(path):
+    """Turn one image file into a feature vector according to FEATURE_MODE."""
+    if FEATURE_MODE == "extract":
+        img = Image.open(path).convert("RGB").resize(IMG_SIZE)
+        arr = np.ascontiguousarray(np.array(img, dtype=np.float32).flatten() / 255.0, dtype=np.float32)
+        out = ffi.new("float[]", N_FEATURES)
+        lib.extract_features(ffi.from_buffer("float[]", arr), out, N_FEATURES)
+        return np.array([out[i] for i in range(N_FEATURES)], dtype=np.float32)
+    else:  # flatten: raw pixels straight in, no extract_features call
+        mode = "L" if FLATTEN_GRAYSCALE else "RGB"
+        img = Image.open(path).convert(mode).resize((FLATTEN_DIM, FLATTEN_DIM))
+        return np.array(img, dtype=np.float32).flatten() / 255.0
+
+
 def load_felidae(max_per_class):
-    """Load the felidae dataset through the Rust extract_features pipeline."""
+    """Load the felidae dataset, using extract features or raw pixels per FEATURE_MODE."""
     class_folders = {"cat": 0, "lion": 1, "cheetah": 2}
     X, Y = [], []
     for folder, label in class_folders.items():
@@ -42,12 +100,7 @@ def load_felidae(max_per_class):
                  if f.lower().endswith((".jpg", ".png"))][:max_per_class]
         for fname in files:
             try:
-                img = Image.open(os.path.join(folder_path, fname)).convert("RGB").resize(IMG_SIZE)
-                arr = np.array(img, dtype=np.float32).flatten() / 255.0
-                arr = np.ascontiguousarray(arr, dtype=np.float32)
-                out = ffi.new("float[]", N_FEATURES)
-                lib.extract_features(ffi.from_buffer("float[]", arr), out, N_FEATURES)
-                X.append(np.array([out[i] for i in range(N_FEATURES)], dtype=np.float32))
+                X.append(features_from_image(os.path.join(folder_path, fname)))
                 Y.append(label)
             except Exception as e:
                 print(f"  Failed on {fname}: {e}")
@@ -67,6 +120,9 @@ def split_train_test(X, Y_onehot, labels, test_ratio=0.2):
     return (X[tr], Y_onehot[tr], labels[tr]), (X[te], Y_onehot[te], labels[te])
 
 
+# ----------------------------------------------------------------------------
+# Train / evaluate through Rust (logs to TensorBoard)
+# ----------------------------------------------------------------------------
 def train_eval(X_train, Y_train, X_test, Y_test, arch, epochs, lr, log_dir):
     """Create, train (logging to log_dir), and evaluate an MLP. Returns (train_acc, test_acc)."""
     os.makedirs(log_dir, exist_ok=True)
@@ -129,6 +185,10 @@ def save_plot(fig, name):
     plt.close(fig)
     print(f"  Saved plot: {path}")
 
+
+# ============================================================================
+# EXPERIMENTS
+# ============================================================================
 
 def experiment_1_learning_rate(data):
     print("\n=== Experiment 1 — Learning rate ===")
@@ -383,6 +443,9 @@ def experiment_8_confusion(data):
             print(f"    {name}: {np.mean(preds[mask] == i) * 100:.1f}%")
 
 
+# ============================================================================
+# MAIN
+# ============================================================================
 def main():
     print("Loading main dataset (1000/class)...")
     X, Y, labels = load_felidae(max_per_class=1000)
@@ -394,8 +457,8 @@ def main():
     experiment_1_learning_rate(data)
     experiment_2_epochs(data)
     experiment_3_depth(data)
-    experiment_4_dataset_size()
-    experiment_5_overfitting()
+    experiment_4_dataset_size()          # loads its own 3000/class
+    experiment_5_overfitting()           # loads its own 50/class
     experiment_6_underfitting(data)
     experiment_7_sweet_spot(data)
     experiment_8_confusion(data)
