@@ -193,7 +193,6 @@ impl Rosenblatt {
         Matrix::from_vec(xk, 1, x_with_bias.cols)
     }
 
-<<<<<<< HEAD
     pub fn fetch_accuracy(epochs: usize, successes: Vec<f32>, nb_sample: f32){
         for i in 0..successes.len() {
             println!(
@@ -202,11 +201,6 @@ impl Rosenblatt {
                 successes[i],
                 (successes[i] / nb_sample) * 100.0
             );
-=======
-    pub fn fetch_accuracy(_epoch:usize, errors: Vec<f32>, nb_sample: f32){
-        for i in 0..errors.len() {
-            println!("Epoch {:>4}-{} | Success: {:>4} | Accuracy: {:>6.2}%", i*100,(i+1)*100, errors[i] , (errors[i] / (nb_sample * 100.0)) * 100.0 );
->>>>>>> a7028d012043ba33c7fb6dcc6d704c5020eca42b
         }
     }
 
@@ -369,7 +363,7 @@ pub extern "C" fn transforming_ros(x: *const f32,
         Box::into_raw(Box::new(MatrixFFIRos{data, rows,cols}))
     }
 }
-<<<<<<< HEAD
+
 
 #[unsafe(no_mangle)]
 pub extern "C" fn get_weights_rosenblatt(
@@ -387,5 +381,3 @@ pub extern "C" fn get_weights_rosenblatt(
         weights_vec.leak().as_mut_ptr()
     }
 }
-=======
->>>>>>> a7028d012043ba33c7fb6dcc6d704c5020eca42b

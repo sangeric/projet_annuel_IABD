@@ -27,7 +27,7 @@ ffi.cdef("""
 """, override=True)
 
 BASE = os.path.abspath("felidae_classifier")
-if os.name != "Windows":
+if os.name != "nt":
     lib = ffi.dlopen(os.path.join(BASE, "target/release/libfelidae_classifier.so"))
 else:
     lib = ffi.dlopen(os.path.join(BASE, "target/release/felidae_classifier.dll"))
