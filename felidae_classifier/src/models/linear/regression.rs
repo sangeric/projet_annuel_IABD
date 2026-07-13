@@ -1,5 +1,3 @@
-use image::buffer::Rows;
-use serde::forward_to_deserialize_any;
 use crate::tensor::Matrix;
 use super::Regression;
 
@@ -77,10 +75,8 @@ pub struct MatrixFFIRegression{
 pub extern "C" fn create_regression(
     nb_feature : usize
 )->*mut Regression{
-    unsafe {
-        let regression = Box::new(Regression::new(nb_feature));
-        Box::into_raw(regression)
-    }
+    let regression = Box::new(Regression::new(nb_feature));
+    Box::into_raw(regression)
 }
 
 #[unsafe(no_mangle)]
@@ -93,11 +89,9 @@ pub extern "C" fn fit_regression(regression: *mut Regression,
                                  bias : f32,
 ){
     unsafe{
-        let regression = unsafe {
-            match regression.as_mut() {
-                Some(c) =>c,
-                None => return,
-            }
+        let regression = match regression.as_mut() {
+            Some(c) =>c,
+            None => return,
         };
         let x_slice = std::slice::from_raw_parts(x, x_rows * x_cols);
         let x_matrix = Matrix::from_vec(x_slice.to_vec(), x_rows, x_cols);
@@ -116,11 +110,9 @@ pub extern "C" fn predict_regression(regression: *mut Regression,
                                      bias: f32,
 ) -> *mut MatrixFFIRegression{
     unsafe {
-        let regression = unsafe{
-            match regression.as_mut(){
-                Some(c) => c,
-                None => return std::ptr::null_mut(),
-            }
+        let regression = match regression.as_mut(){
+            Some(c) => c,
+            None => return std::ptr::null_mut(),
         };
         let x_slice = std::slice::from_raw_parts(x, x_cols * x_rows);
         let x_matrix = Matrix::from_vec(x_slice.to_vec(), x_rows, x_cols);
