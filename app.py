@@ -5,21 +5,33 @@ from cffi import FFI
 import os
 import json
 
-# --- FFI setup ---
 ffi = FFI()
 ffi.cdef("""
     void* mlp_create(const uint32_t* layer_sizes, size_t n_layers, const char* activation, const char* output_activation);
-    void mlp_train(void* mlp, const float* x_data, size_t x_rows, size_t x_cols, const float* y_data, size_t y_rows, size_t y_cols, size_t epochs, float learning_rate, const char* log_dir);
+    void mlp_train(void* mlp, const float* x_data, size_t x_rows, size_t x_cols, const float* y_data, size_t y_rows, size_t y_cols, size_t epochs, float learning_rate);
     void mlp_predict_classes(const void* mlp, const float* x_data, size_t x_rows, size_t x_cols, uint32_t* out_predictions);
     void mlp_predict_raw(const void* mlp, const float* x_data, size_t x_rows, size_t x_cols, float* out_predictions);
     int mlp_save(const void* mlp, const char* path);
     void* mlp_load(const char* path);
     void mlp_destroy(void* mlp);
     void extract_features(const float* image_data, float* out, size_t out_len);
+
+    void* rbfn_train(const float* x_data, size_t x_rows, size_t x_cols,
+                     const float* y_data, size_t y_rows, size_t y_cols,
+                     size_t k, float gamma, size_t kmeans_iters, uint64_t seed);
+    void rbfn_predict_classes(const void* model, const float* x_data, size_t x_rows, size_t x_cols,
+                              uint32_t* out_predictions);
+    int rbfn_save(const void* model, const char* path);
+    void* rbfn_load(const char* path);
+    void rbfn_destroy(void* model);
 """, override=True)
 
 BASE = os.path.abspath("felidae_classifier")
-lib = ffi.dlopen(os.path.join(BASE, "target/release/libfelidae_classifier.so"))
+if os.name != "Windows":
+    lib = ffi.dlopen(os.path.join(BASE, "target/release/libfelidae_classifier.so"))
+else:
+    lib = ffi.dlopen(os.path.join(BASE, "target/release/felidae_classifier.dll"))
+
 MODEL_DIR = os.path.join(BASE, "saved_models")
 for subfolder in ["mlp", "linear", "svm", "rbfn"]:
     os.makedirs(os.path.join(MODEL_DIR, subfolder), exist_ok=True)
@@ -28,24 +40,25 @@ CLASS_NAMES = ["Cat", "Lion", "Cheetah"]
 N_FEATURES = 20
 N_FLATTEN = 3072
 IMG_SIZE = (32, 32)
-DATASET_ROOT = os.path.join(BASE, "dataset")
+DATASET_ROOT = os.path.join(BASE, "dataset_clean")
 
 
 # --- Metadata helpers ---
-def save_model_meta(feature_mode):
-    meta = {"feature_mode": feature_mode}
-    with open(os.path.join(MODEL_DIR, "mlp", "mlp_meta.json"), "w") as f:
+# Each model stores its own metadata (which feature mode it was trained with,
+# plus any model-specific hyperparameters) so inference can reproduce the exact
+# preprocessing used at training time.
+def save_model_meta(model_name, meta):
+    with open(os.path.join(MODEL_DIR, model_name, f"{model_name}_meta.json"), "w") as f:
         json.dump(meta, f)
 
-def load_model_meta():
-    meta_path = os.path.join(MODEL_DIR, "mlp", "mlp_meta.json")
+def load_model_meta(model_name):
+    meta_path = os.path.join(MODEL_DIR, model_name, f"{model_name}_meta.json")
     if not os.path.exists(meta_path):
-        return "Extract (20 features)"
+        return {"feature_mode": "Extract (20 features)"}
     with open(meta_path) as f:
-        return json.load(f)["feature_mode"]
+        return json.load(f)
 
 
-# --- Preprocessing ---
 def preprocess(pil_image, use_extract=True):
     img = pil_image.convert("RGB").resize(IMG_SIZE)
     arr = np.array(img, dtype=np.float32).flatten() / 255.0
@@ -61,7 +74,6 @@ def preprocess(pil_image, use_extract=True):
     return np.ascontiguousarray(result.reshape(1, -1), dtype=np.float32)
 
 
-# --- Dataset loading ---
 def load_dataset(max_samples=3000, use_extract=True):
     class_folders = {"cat": 0, "lion": 1, "cheetah": 2}
     X, Y = [], []
@@ -98,7 +110,6 @@ def load_dataset(max_samples=3000, use_extract=True):
     return X, Y_onehot
 
 
-# --- MLP train and save ---
 def train_and_save_mlp(epochs, learning_rate, max_samples_per_class, hidden_layers_str, feature_mode, progress=gr.Progress()):
     use_extract = "Extract" in feature_mode
     n_inputs = N_FEATURES if use_extract else N_FLATTEN
@@ -107,6 +118,14 @@ def train_and_save_mlp(epochs, learning_rate, max_samples_per_class, hidden_laye
     X, Y = load_dataset(max_samples=int(max_samples_per_class), use_extract=use_extract)
     if len(X) == 0:
         return "No dataset found at: " + DATASET_ROOT
+
+    # hold out 20% as a test set the model never trains on
+    rng = np.random.default_rng(42)
+    idx = rng.permutation(len(X))
+    split = int(0.8 * len(X))
+    train_idx, test_idx = idx[:split], idx[split:]
+    X_train, Y_train = X[train_idx], Y[train_idx]
+    X_test, Y_test = X[test_idx], Y[test_idx]
 
     try:
         hidden = [int(x.strip()) for x in hidden_layers_str.split(",")]
@@ -121,11 +140,27 @@ def train_and_save_mlp(epochs, learning_rate, max_samples_per_class, hidden_laye
     if mlp == ffi.NULL:
         return "Failed to create MLP"
 
-    X_ptr = ffi.from_buffer("float[]", X)
-    Y_ptr = ffi.from_buffer("float[]", Y)
+    X_ptr = ffi.from_buffer("float[]", np.ascontiguousarray(X_train, dtype=np.float32))
+    Y_ptr = ffi.from_buffer("float[]", np.ascontiguousarray(Y_train, dtype=np.float32))
 
     progress(0.2, desc=f"Training {int(epochs)} epochs at lr={learning_rate}...")
-    lib.mlp_train(mlp, X_ptr, X.shape[0], X.shape[1], Y_ptr, Y.shape[0], Y.shape[1], int(epochs), float(learning_rate), b"./runs/logdir")
+    lib.mlp_train(
+        mlp,
+        X_ptr, X_train.shape[0], X_train.shape[1],
+        Y_ptr, Y_train.shape[0], Y_train.shape[1],
+        int(epochs), float(learning_rate)
+    )
+
+    def acc(Xset, Yset):
+        Xc = np.ascontiguousarray(Xset, dtype=np.float32)
+        out = ffi.new("uint32_t[]", Xc.shape[0])
+        lib.mlp_predict_classes(mlp, ffi.from_buffer("float[]", Xc), Xc.shape[0], Xc.shape[1], out)
+        preds = np.array([out[i] for i in range(Xc.shape[0])])
+        true = np.argmax(Yset, axis=1)
+        return float(np.mean(preds == true) * 100.0)
+
+    train_acc = acc(X_train, Y_train)
+    test_acc = acc(X_test, Y_test)
 
     save_path = os.path.join(MODEL_DIR, "mlp", "mlp.bin").encode()
     ret = lib.mlp_save(mlp, save_path)
@@ -134,20 +169,21 @@ def train_and_save_mlp(epochs, learning_rate, max_samples_per_class, hidden_laye
     if ret != 0:
         return "Training done but save failed"
 
-    save_model_meta(feature_mode)
+    save_model_meta("mlp", {"feature_mode": feature_mode})
     progress(1.0, desc="Done")
     return (
         f"Training complete.\n"
-        f"Input mode   : {feature_mode}\n"
-        f"Architecture : {arch}\n"
-        f"Epochs       : {int(epochs)}\n"
-        f"Learning rate: {learning_rate}\n"
-        f"Samples      : {len(X)} ({len(X) // 3} per class)\n"
-        f"Saved to     : {save_path.decode()}"
+        f"Input mode    : {feature_mode}\n"
+        f"Architecture  : {arch}\n"
+        f"Epochs        : {int(epochs)}\n"
+        f"Learning rate : {learning_rate}\n"
+        f"Samples       : {len(X_train)} train / {len(X_test)} test\n"
+        f"Train accuracy: {train_acc:.1f}%\n"
+        f"Test accuracy : {test_acc:.1f}%\n"
+        f"Saved to      : {save_path.decode()}"
     )
 
 
-# --- MLP predict ---
 def predict_mlp(X):
     model_path = os.path.join(MODEL_DIR, "mlp", "mlp.bin")
     if not os.path.exists(model_path):
@@ -163,28 +199,105 @@ def predict_mlp(X):
     lib.mlp_predict_classes(mlp, ffi.from_buffer("float[]", X), 1, X.shape[1], out_cls)
     lib.mlp_destroy(mlp)
 
-    scores = [float(out_raw[i]) for i in range(3)]
-    min_s, max_s = min(scores), max(scores)
-    if max_s != min_s:
-        scores = [(s - min_s) / (max_s - min_s) for s in scores]
+    scores_raw = np.array([float(out_raw[i]) for i in range(3)], dtype=np.float64)
+    exp = np.exp(scores_raw - np.max(scores_raw))
+    probs = exp / exp.sum()
 
-    return {CLASS_NAMES[i]: round(scores[i], 3) for i in range(3)}, None
+    return {CLASS_NAMES[i]: round(float(probs[i]), 3) for i in range(3)}, None
 
 
-# --- Main predict dispatcher ---
+def train_and_save_rbfn(k, gamma, kmeans_iters, max_samples_per_class, feature_mode, progress=gr.Progress()):
+    use_extract = "Extract" in feature_mode
+
+    progress(0, desc="Loading dataset...")
+    X, Y = load_dataset(max_samples=int(max_samples_per_class), use_extract=use_extract)
+    if len(X) == 0:
+        return "No dataset found at: " + DATASET_ROOT
+
+    # hold out 20% as a test set the model never trains on
+    rng = np.random.default_rng(42)
+    idx = rng.permutation(len(X))
+    split = int(0.8 * len(X))
+    train_idx, test_idx = idx[:split], idx[split:]
+    X_train, Y_train = X[train_idx], Y[train_idx]
+    X_test, Y_test = X[test_idx], Y[test_idx]
+
+    progress(0.3, desc=f"Training RBFN (K={int(k)}, gamma={gamma})...")
+    X_c = np.ascontiguousarray(X_train, dtype=np.float32)
+    Y_c = np.ascontiguousarray(Y_train, dtype=np.float32)
+    model = lib.rbfn_train(
+        ffi.from_buffer("float[]", X_c), X_c.shape[0], X_c.shape[1],
+        ffi.from_buffer("float[]", Y_c), Y_c.shape[0], Y_c.shape[1],
+        int(k), float(gamma), int(kmeans_iters), 0
+    )
+    if model == ffi.NULL:
+        return "Failed to train RBFN"
+
+    def acc(Xset, Yset):
+        Xc = np.ascontiguousarray(Xset, dtype=np.float32)
+        out = ffi.new("uint32_t[]", Xc.shape[0])
+        lib.rbfn_predict_classes(model, ffi.from_buffer("float[]", Xc), Xc.shape[0], Xc.shape[1], out)
+        preds = np.array([out[i] for i in range(Xc.shape[0])])
+        true = np.argmax(Yset, axis=1)
+        return float(np.mean(preds == true) * 100.0)
+
+    train_acc = acc(X_train, Y_train)
+    test_acc = acc(X_test, Y_test)
+
+    save_path = os.path.join(MODEL_DIR, "rbfn", "rbfn.bin").encode()
+    ret = lib.rbfn_save(model, save_path)
+    lib.rbfn_destroy(model)
+
+    if ret != 0:
+        return "Training done but save failed"
+
+    save_model_meta("rbfn", {"feature_mode": feature_mode, "k": int(k), "gamma": float(gamma)})
+    progress(1.0, desc="Done")
+    return (
+        f"Training complete.\n"
+        f"Input mode    : {feature_mode}\n"
+        f"Centers K     : {int(k)}\n"
+        f"Gamma         : {gamma}\n"
+        f"Samples       : {len(X_train)} train / {len(X_test)} test\n"
+        f"Train accuracy: {train_acc:.1f}%\n"
+        f"Test accuracy : {test_acc:.1f}%\n"
+        f"Saved to      : {save_path.decode()}"
+    )
+
+
+def predict_rbfn(X):
+    model_path = os.path.join(MODEL_DIR, "rbfn", "rbfn.bin")
+    if not os.path.exists(model_path):
+        return None, "No trained RBFN found — train it first in the Train tab"
+
+    model = lib.rbfn_load(model_path.encode())
+    if model == ffi.NULL:
+        return None, "Failed to load RBFN"
+
+    out_cls = ffi.new("uint32_t[]", 1)
+    lib.rbfn_predict_classes(model, ffi.from_buffer("float[]", X), 1, X.shape[1], out_cls)
+    lib.rbfn_destroy(model)
+
+    predicted = int(out_cls[0])
+    # RBFN exposes only the class index, so we show a hard 1.0 on the winner.
+    scores = {name: (1.0 if i == predicted else 0.0) for i, name in enumerate(CLASS_NAMES)}
+    return scores, None
+
+
 def predict(pil_image, model_choice):
     if pil_image is None:
         return None, "Please upload an image"
 
-    feature_mode = load_model_meta()
-    use_extract = "Extract" in feature_mode
-    X = preprocess(pil_image, use_extract=use_extract)
-
     if model_choice == "MLP":
-        scores, err = predict_mlp(X)
-        if err:
-            return None, err
-        return scores, None
+        meta = load_model_meta("mlp")
+        use_extract = "Extract" in meta["feature_mode"]
+        X = preprocess(pil_image, use_extract=use_extract)
+        return predict_mlp(X)
+    elif model_choice == "RBFN":
+        meta = load_model_meta("rbfn")
+        use_extract = "Extract" in meta["feature_mode"]
+        X = preprocess(pil_image, use_extract=use_extract)
+        return predict_rbfn(X)
     else:
         return None, f"{model_choice} not yet implemented"
 
@@ -196,25 +309,28 @@ def classify(pil_image, model_choice):
     return scores, ""
 
 
-# --- Model status ---
 def check_model_status():
     lines = []
-    mlp_path = os.path.join(MODEL_DIR, "mlp", "mlp.bin")
-    meta_path = os.path.join(MODEL_DIR, "mlp", "mlp_meta.json")
 
+    mlp_path = os.path.join(MODEL_DIR, "mlp", "mlp.bin")
     if os.path.exists(mlp_path):
-        mode = load_model_meta() if os.path.exists(meta_path) else "unknown"
+        mode = load_model_meta("mlp")["feature_mode"]
         lines.append(f"✅ MLP — ready ({mode})")
     else:
         lines.append("❌ MLP — not trained")
 
+    rbfn_path = os.path.join(MODEL_DIR, "rbfn", "rbfn.bin")
+    if os.path.exists(rbfn_path):
+        meta = load_model_meta("rbfn")
+        lines.append(f"✅ RBFN — ready ({meta['feature_mode']}, K={meta.get('k', '?')}, gamma={meta.get('gamma', '?')})")
+    else:
+        lines.append("❌ RBFN — not trained")
+
     lines.append("❌ Linear (Rosenblatt) — not yet implemented")
     lines.append("❌ SVM — not yet implemented")
-    lines.append("❌ RBFN — not yet implemented")
     return "\n".join(lines)
 
 
-# --- UI ---
 with gr.Blocks(title="Felidae Classifier") as demo:
     gr.Markdown("# 🐱 Felidae Classifier")
     gr.Markdown("Classify images of cats, lions, and cheetahs using models built from scratch in Rust.")
@@ -243,67 +359,96 @@ with gr.Blocks(title="Felidae Classifier") as demo:
             )
 
         with gr.Tab("🏋️ Train"):
-            gr.Markdown("### Train and save a model")
-            gr.Markdown("The input and output layer sizes are set automatically based on the input mode.")
+            with gr.Tabs():
+                with gr.Tab("MLP"):
+                    gr.Markdown("### Train and save an MLP")
+                    gr.Markdown("The input and output layer sizes are set automatically based on the input mode.")
 
-            with gr.Row():
-                with gr.Column():
-                    feature_mode = gr.Radio(
-                        choices=["Extract (20 features)", "Flatten (3072 pixels)"],
-                        value="Extract (20 features)",
-                        label="Input mode"
+                    with gr.Row():
+                        with gr.Column():
+                            feature_mode = gr.Radio(
+                                choices=["Extract (20 features)", "Flatten (3072 pixels)"],
+                                value="Extract (20 features)",
+                                label="Input mode"
+                            )
+                            hidden_layers_input = gr.Textbox(
+                                value="32, 16",
+                                label="Hidden layers (comma-separated sizes)"
+                            )
+                            arch_preview = gr.Textbox(
+                                value="[20, 32, 16, 3]",
+                                label="Full architecture (preview)",
+                                interactive=False
+                            )
+
+                        with gr.Column():
+                            epochs_slider = gr.Slider(minimum=10, maximum=10000, value=100, step=10, label="Epochs")
+                            lr_slider = gr.Slider(minimum=0.0001, maximum=0.5, value=0.01, step=0.0001, label="Learning rate")
+                            sample_size_slider = gr.Slider(minimum=100, maximum=5000, value=3000, step=100, label="Max samples per class")
+
+                    train_btn = gr.Button("Train MLP", variant="primary")
+                    train_output = gr.Textbox(label="Training log", interactive=False, lines=8)
+
+                    def update_arch_preview(mode, hidden_str):
+                        n_inputs = N_FEATURES if "Extract" in mode else N_FLATTEN
+                        try:
+                            hidden = [int(x.strip()) for x in hidden_str.split(",")]
+                            arch = [n_inputs] + hidden + [3]
+                            return str(arch)
+                        except ValueError:
+                            return "Invalid hidden layers"
+
+                    def update_hidden_default(mode):
+                        return "32, 16" if "Extract" in mode else "128, 64"
+
+                    feature_mode.change(
+                        fn=update_hidden_default,
+                        inputs=[feature_mode],
+                        outputs=[hidden_layers_input]
                     )
-                    hidden_layers_input = gr.Textbox(
-                        value="32, 16",
-                        label="Hidden layers (comma-separated sizes)"
+                    feature_mode.change(
+                        fn=update_arch_preview,
+                        inputs=[feature_mode, hidden_layers_input],
+                        outputs=[arch_preview]
                     )
-                    arch_preview = gr.Textbox(
-                        value="[20, 32, 16, 3]",
-                        label="Full architecture (preview)",
-                        interactive=False
+                    hidden_layers_input.change(
+                        fn=update_arch_preview,
+                        inputs=[feature_mode, hidden_layers_input],
+                        outputs=[arch_preview]
                     )
 
-                with gr.Column():
-                    epochs_slider = gr.Slider(minimum=10, maximum=10000, value=100, step=10, label="Epochs")
-                    lr_slider = gr.Slider(minimum=0.01, maximum=1, value=0.01, step=0.01, label="Learning rate")
-                    sample_size_slider = gr.Slider(minimum=100, maximum=5000, value=3000, step=100, label="Max samples per class")
+                    train_btn.click(
+                        fn=train_and_save_mlp,
+                        inputs=[epochs_slider, lr_slider, sample_size_slider, hidden_layers_input, feature_mode],
+                        outputs=train_output
+                    )
 
-            train_btn = gr.Button("Train MLP", variant="primary")
-            train_output = gr.Textbox(label="Training log", interactive=False, lines=8)
+                with gr.Tab("RBFN"):
+                    gr.Markdown("### Train and save an RBFN")
+                    gr.Markdown("The RBFN trains in one shot: k-means elects K centers, then a single linear solve finds the weights.")
 
-            def update_arch_preview(mode, hidden_str):
-                n_inputs = N_FEATURES if "Extract" in mode else N_FLATTEN
-                try:
-                    hidden = [int(x.strip()) for x in hidden_str.split(",")]
-                    arch = [n_inputs] + hidden + [3]
-                    return str(arch)
-                except ValueError:
-                    return "Invalid hidden layers"
+                    with gr.Row():
+                        with gr.Column():
+                            rbfn_feature_mode = gr.Radio(
+                                choices=["Extract (20 features)", "Flatten (3072 pixels)"],
+                                value="Extract (20 features)",
+                                label="Input mode"
+                            )
+                            rbfn_k_slider = gr.Slider(minimum=2, maximum=400, value=50, step=1, label="Number of centers K")
+                            rbfn_gamma_slider = gr.Slider(minimum=0.001, maximum=10.0, value=0.1, step=0.001, label="Gamma (bump width)")
 
-            def update_hidden_default(mode):
-                return "32, 16" if "Extract" in mode else "128, 64"
+                        with gr.Column():
+                            rbfn_iters_slider = gr.Slider(minimum=5, maximum=100, value=20, step=5, label="K-means iterations")
+                            rbfn_sample_slider = gr.Slider(minimum=100, maximum=5000, value=3000, step=100, label="Max samples per class")
 
-            feature_mode.change(
-                fn=update_hidden_default,
-                inputs=[feature_mode],
-                outputs=[hidden_layers_input]
-            )
-            feature_mode.change(
-                fn=update_arch_preview,
-                inputs=[feature_mode, hidden_layers_input],
-                outputs=[arch_preview]
-            )
-            hidden_layers_input.change(
-                fn=update_arch_preview,
-                inputs=[feature_mode, hidden_layers_input],
-                outputs=[arch_preview]
-            )
+                    rbfn_train_btn = gr.Button("Train RBFN", variant="primary")
+                    rbfn_train_output = gr.Textbox(label="Training log", interactive=False, lines=8)
 
-            train_btn.click(
-                fn=train_and_save_mlp,
-                inputs=[epochs_slider, lr_slider, sample_size_slider, hidden_layers_input, feature_mode],
-                outputs=train_output
-            )
+                    rbfn_train_btn.click(
+                        fn=train_and_save_rbfn,
+                        inputs=[rbfn_k_slider, rbfn_gamma_slider, rbfn_iters_slider, rbfn_sample_slider, rbfn_feature_mode],
+                        outputs=rbfn_train_output
+                    )
 
         with gr.Tab("📊 Status"):
             gr.Markdown("### Model status")

@@ -21,9 +21,6 @@ import matplotlib.pyplot as plt
 from cffi import FFI
 from PIL import Image
 
-# ----------------------------------------------------------------------------
-# FFI setup
-# ----------------------------------------------------------------------------
 ffi = FFI()
 ffi.cdef("""
     void* mlp_create(const uint32_t* layer_sizes, size_t n_layers, const char* activation, const char* output_activation);
@@ -36,9 +33,6 @@ ffi.cdef("""
 BASE = os.path.abspath("felidae_classifier")
 lib = ffi.dlopen(os.path.join(BASE, "target/release/libfelidae_classifier.so"))
 
-# ----------------------------------------------------------------------------
-# Config
-# ----------------------------------------------------------------------------
 # Input representation:
 #   "extract" -> 20 hand-crafted features via the Rust extract_features pipeline
 #   "flatten" -> raw pixels, resized and (optionally) grayscaled, fed in directly
@@ -70,9 +64,6 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 np.random.seed(42)
 
 
-# ----------------------------------------------------------------------------
-# Data loading
-# ----------------------------------------------------------------------------
 def features_from_image(path):
     """Turn one image file into a feature vector according to FEATURE_MODE."""
     if FEATURE_MODE == "extract":
@@ -120,9 +111,7 @@ def split_train_test(X, Y_onehot, labels, test_ratio=0.2):
     return (X[tr], Y_onehot[tr], labels[tr]), (X[te], Y_onehot[te], labels[te])
 
 
-# ----------------------------------------------------------------------------
-# Train / evaluate through Rust (logs to TensorBoard)
-# ----------------------------------------------------------------------------
+
 def train_eval(X_train, Y_train, X_test, Y_test, arch, epochs, lr, log_dir):
     """Create, train (logging to log_dir), and evaluate an MLP. Returns (train_acc, test_acc)."""
     os.makedirs(log_dir, exist_ok=True)
@@ -185,10 +174,6 @@ def save_plot(fig, name):
     plt.close(fig)
     print(f"  Saved plot: {path}")
 
-
-# ============================================================================
-# EXPERIMENTS
-# ============================================================================
 
 def experiment_1_learning_rate(data):
     print("\n=== Experiment 1 — Learning rate ===")
