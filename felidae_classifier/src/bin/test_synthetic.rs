@@ -9,7 +9,7 @@ use felidae_classifier::data::one_hot_encode;
 
 fn main() {
     println!("=== Synthetic Test Cases ===\n");
-
+/*
     // ----------------------------------------------------------------
     // DATASET 1 — Linearly separable
     // 3 clusters of points, one per class, clearly separated
@@ -130,7 +130,7 @@ fn main() {
     println!("\nResults:");
     print_predictions(&preds3, &y_nonlinear);
     println!("Final accuracy: {:.1}%", clf3.accuracy(&x_transformed, &y_nonlinear) * 100.0);
-
+*/
 
     //-------------------------------------------------------------------- Rosenblatt -------------------------------------------
     println!("\n\nStart of rosenblatt");
@@ -179,13 +179,13 @@ fn main() {
     println!("\n=== Linear Classifier on Dataset 1 (linearly separable) ===\n");
 
     let mut linear_rosen = RosenblattClassifier::new(nb_features, 0.01, 1.0,1.0,1.0,500);
-    linear_rosen.train(&x_linear_rosen, &y_linear_rosen ,500);
+    linear_rosen.train(&x_linear_rosen, &y_linear_rosen ,100);
     linear_rosen.predict(&x_linear_rosen, &y_linear_rosen);
 
 
     println!("\n=== Linear Classifier on Dataset 2 (non-linearly separable) ===\n");
     let mut non_linear_rosen = RosenblattClassifier::new(nb_features, 0.01, 1.0,1.0,1.0,500);
-    non_linear_rosen.train(&x_nonlinear_rosen, &y_nonlinear_rosen ,500);
+    non_linear_rosen.train(&x_nonlinear_rosen, &y_nonlinear_rosen ,100);
     non_linear_rosen.predict(&x_nonlinear_rosen, &y_nonlinear_rosen);
 
 
@@ -195,7 +195,7 @@ fn main() {
     let mut non_linear_transform_rosen = RosenblattClassifier::new(nb_deg2, 0.01, 1.0, 1.0, 1.0 , 500);
     let x_non_linear_transform = non_linear_transform_rosen.transform(&x_nonlinear_rosen);
     println!("x transformed {:?}", x_non_linear_transform);
-    non_linear_transform_rosen.train(&x_non_linear_transform, &y_nonlinear_rosen, 500);
+    non_linear_transform_rosen.train(&x_non_linear_transform, &y_nonlinear_rosen, 100);
     non_linear_transform_rosen.predict(&x_non_linear_transform, &y_nonlinear_rosen);
 
 
@@ -275,7 +275,7 @@ fn main() {
     println!("MAE: {:.6}", mae);
     */
 
-
+/*
 
     // ----------------------------------------------------------------
     // MLP ON DATASET 1 — linearly separable
@@ -310,7 +310,7 @@ fn main() {
     let mlp_preds2 = mlp2.predict(&x_nonlinear);
     println!("Final accuracy: {:.1}%", mlp2.accuracy(&x_nonlinear, &y_nonlinear_onehot) * 100.0);
 
-
+*/
 }
 
 /// Pretty-prints a dataset

@@ -5,15 +5,11 @@ use super::{Rosenblatt, RosenblattClassifier};
 use rand::SeedableRng;
 
 impl Rosenblatt {
-    pub fn new(n_features: usize, learning_rate: f32, bias: f32, seed_offset: u64) -> Self {
-        let seed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64 + seed_offset;
+    pub fn new(n_features: usize, learning_rate: f32, bias: f32, seed: u64) -> Self {
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
         let mut weight_data = Vec::new();
-        //biais
+
         for _ in 0..n_features+1{
             weight_data.push(rng.random_range(-0.01..0.01));
         }
@@ -31,6 +27,14 @@ impl Rosenblatt {
         return &self.weights;
     }
 
+    pub fn get_bias(&self) -> f32 {
+        self.bias
+    }
+
+    pub fn get_learning_rate(&self) -> f32 {
+        self.learning_rate
+    }
+
     pub fn to_binary_labels(y : &Vec<usize>, value :usize)->Vec<i32>{
         let mut new_y = Vec::new();
         for i in 0..y.len(){
@@ -44,17 +48,12 @@ impl Rosenblatt {
         new_y
     }
 
-    //  Le cours Rosenblatt: 𝑊 ← 𝑊 + 𝛼 ( 𝑌𝑘 − 𝑔(𝑋𝑘 ) 𝑋𝑘
-    // 𝛼 le pas d’apprentissage
-    // 𝑋𝑘 les paramètres de l’exemples k et le biais 𝑥0  𝑘 = 1.
-    // 𝑌𝑘 la sortie attendue pour l’exemple k.
-    // 𝑔(𝑋𝑘 ) la sortie obtenue par le perceptron pour l’exemple k.
     pub fn train(&mut self, x : &Matrix, y: &Vec<i32>, epochs : usize){
         //add the bias
         let x_with_bias = Self::add_bias_column(self,x);
         let nb_sample :f32 = x.rows as f32;
 
-        let mut tab_success:Vec<f32> = vec![0.0; epochs/100];
+        let mut tab_success:Vec<f32> = vec![0.0; epochs];
 
         for epoch in 0..epochs{
             for position in 0..x.rows{
@@ -71,7 +70,7 @@ impl Rosenblatt {
                 let error = yk - prediction as f32;
 
                 if prediction == yk{
-                    tab_success[epoch/100]+=1.0;
+                    tab_success[epoch] += 1.0;
                 }
 
                 for i in 0..self.weights.data.len() {
@@ -85,10 +84,87 @@ impl Rosenblatt {
         Self::fetch_accuracy(epochs, tab_success, nb_sample);
     }
 
+    pub fn train_with_eval(
+        &mut self,
+        x: &Matrix,
+        y: &Vec<i32>,
+        x_test: &Matrix,
+        y_test: &Vec<i32>,
+        epochs: usize,
+    ) -> (Vec<f32>, Vec<f32>) {
+        let x_with_bias = Self::add_bias_column(self, x);
+        let nb_sample: f32 = x.rows as f32;
+
+        let mut train_history = Vec::with_capacity(epochs);
+        let mut test_history = Vec::with_capacity(epochs);
+
+        for epoch in 0..epochs {
+            let mut success = 0.0;
+
+            for position in 0..x.rows {
+                let xk = Self::get_xk(&x_with_bias, position);
+                let g_xk = Self::somme(&xk, &self.weights);
+                let prediction: f32 = if g_xk > 0.0 { 1.0 } else { -1.0 };
+                let yk = y[position] as f32;
+                let error = yk - prediction;
+
+                if prediction == yk {
+                    success += 1.0;
+                }
+
+                for i in 0..self.weights.data.len() {
+                    self.weights.data[i] += self.learning_rate * error * xk.data[i];
+                }
+            }
+
+            let train_acc = success / nb_sample;
+            let test_acc = Self::compute_accuracy_with_eval(self, x_test, y_test);
+
+            println!(
+                "Epoch {:>4} | Train: {:>5.1}% | Test: {:>5.1}%",
+                epoch, train_acc * 100.0, test_acc * 100.0
+            );
+
+            train_history.push(train_acc);
+            test_history.push(test_acc);
+        }
+
+        (train_history, test_history)
+    }
+
+    pub fn compute_accuracy_with_eval(&mut self, x: &Matrix, y: &Vec<i32>) -> f32 {
+        let raw_scores = Self::predict(self, x);
+        let mut success = 0.0;
+
+        for i in 0..raw_scores.len() {
+            let prediction = if raw_scores[i] > 0.0 { 1.0 } else { -1.0 };
+            if prediction == y[i] as f32 {
+                success += 1.0;
+            }
+        }
+
+        success / x.rows as f32
+    }
+
+    pub fn compute_accuracy(&mut self, x: &Matrix, y: &Vec<i32>) -> f32 {
+        let x_with_bias = Self::add_bias_column(self, x);
+        let mut success = 0.0;
+
+        for position in 0..x.rows {
+            let xk = Self::get_xk(&x_with_bias, position);
+            let g_xk = Self::somme(&xk, &self.weights);
+            let prediction: f32 = if g_xk > 0.0 { 1.0 } else { -1.0 };
+            if prediction == y[position] as f32 {
+                success += 1.0;
+            }
+        }
+
+        success / x.rows as f32
+    }
 
 
 
-    //we add 1 at the begining of every rows of the dataset because of the bias
+
     pub fn add_bias_column(&mut self,x : &Matrix) -> Matrix{
         let mut flat_x = Vec::new();
 
@@ -109,21 +185,22 @@ impl Rosenblatt {
         somme
     }
 
-    pub fn get_xk(x_with_bias: &Matrix, position: usize) -> Matrix{
-        let mut xk = Vec::new();
-        for rows in 0..x_with_bias.rows {
-            for cols in 0..x_with_bias.cols{
-                if rows == position{
-                    xk.push(x_with_bias.get(rows, cols));
-                }
-            }
+    pub fn get_xk(x_with_bias: &Matrix, position: usize) -> Matrix {
+        let mut xk = Vec::with_capacity(x_with_bias.cols);
+        for col in 0..x_with_bias.cols {
+            xk.push(x_with_bias.get(position, col));
         }
         Matrix::from_vec(xk, 1, x_with_bias.cols)
     }
 
-    pub fn fetch_accuracy(epoch:usize, errors: Vec<f32>, nb_sample: f32){
-        for i in 0..errors.len() {
-            println!("Epoch {:>4}-{} | Success: {:>4} | Accuracy: {:>6.2}%", i*100,(i+1)*100, errors[i] , (errors[i] / (nb_sample * 100.0)) * 100.0 );
+    pub fn fetch_accuracy(epochs: usize, successes: Vec<f32>, nb_sample: f32){
+        for i in 0..successes.len() {
+            println!(
+                "Epoch {:>4} | Success: {:>4} | Accuracy: {:>6.2}%",
+                i,
+                successes[i],
+                (successes[i] / nb_sample) * 100.0
+            );
         }
     }
 
@@ -140,7 +217,7 @@ impl Rosenblatt {
     }
 
     pub fn print_prediction_result(prediction : &Vec<usize>, label : &Vec<usize>){
-        let class_names = ["cat", "lion", "cheetah"];
+        let class_names = ["cat", "cheetah", "lion"];
         for i in 0..prediction.len(){
             let status = if prediction[i] == label[i] {"OK"} else {"KO"};
             println!(
@@ -177,7 +254,7 @@ impl Rosenblatt {
         let mut argmax = Vec::new();
 
         for i in 0..cat.len() {
-            let scores = [cat[i], lion[i],cheetah[i]];
+            let scores = [cat[i], cheetah[i], lion[i]];
             let max = Self::max_argmax(scores);
             argmax.push(max);
         }
@@ -288,5 +365,22 @@ pub extern "C" fn transforming_ros(X: *const f32,
         let cols = x_transformed.cols;
 
         Box::into_raw(Box::new(MatrixFFIRos{data, rows,cols}))
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn get_weights_rosenblatt(
+    rosenblatt: *mut Rosenblatt,
+) -> *mut f32 {
+    unsafe {
+        let rosenblatt = match rosenblatt.as_mut() {
+            Some(c) => c,
+            None => return std::ptr::null_mut(),
+        };
+
+        let weights = rosenblatt.get_weight();
+        let mut weights_vec = weights.data.clone();
+        weights_vec.shrink_to_fit();
+        weights_vec.leak().as_mut_ptr()
     }
 }

@@ -1,5 +1,7 @@
 use crate::models::perceptron::{Rosenblatt, RosenblattClassifier};
 use crate::tensor::Matrix;
+use std::fs::File;
+use std::io::{Read, Write};
 
 impl RosenblattClassifier{
     pub fn new(n_features: usize, learning_rate : f32, bias_cat: f32, bias_lion: f32, bias_cheetah: f32, seed: u64) -> Self{
@@ -17,12 +19,36 @@ impl RosenblattClassifier{
 
     pub fn train(&mut self, x : &Matrix, y : &Vec<usize> , epochs : usize){
         let y_cat = Rosenblatt::to_binary_labels(y, 0);
-        let y_lion = Rosenblatt::to_binary_labels(y, 1);
-        let y_cheetah = Rosenblatt::to_binary_labels(y, 2);
+        let y_cheetah = Rosenblatt::to_binary_labels(y, 1);
+        let y_lion = Rosenblatt::to_binary_labels(y, 2);
+
 
         self.cat.train(x, &y_cat, epochs);
         self.lion.train(x,&y_lion, epochs);
         self.cheetah.train(x,&y_cheetah, epochs);
+    }
+
+    pub fn train_with_eval(
+        &mut self,
+        x: &Matrix,
+        y: &Vec<usize>,
+        x_test: &Matrix,
+        y_test: &Vec<usize>,
+        epochs: usize,
+    ) -> ((Vec<f32>, Vec<f32>), (Vec<f32>, Vec<f32>), (Vec<f32>, Vec<f32>)) {
+        let y_cat = Rosenblatt::to_binary_labels(y, 0);
+        let y_cheetah = Rosenblatt::to_binary_labels(y, 1);
+        let y_lion = Rosenblatt::to_binary_labels(y, 2);
+
+        let y_cat_test = Rosenblatt::to_binary_labels(y_test, 0);
+        let y_cheetah_test = Rosenblatt::to_binary_labels(y_test, 1);
+        let y_lion_test = Rosenblatt::to_binary_labels(y_test, 2);
+
+        let cat_hist = self.cat.train_with_eval(x, &y_cat, x_test, &y_cat_test, epochs);
+        let lion_hist = self.lion.train_with_eval(x, &y_lion, x_test, &y_lion_test, epochs);
+        let cheetah_hist = self.cheetah.train_with_eval(x, &y_cheetah, x_test, &y_cheetah_test, epochs);
+
+        (cat_hist, lion_hist, cheetah_hist)
     }
 
     pub fn predict(&mut self, x : &Matrix, y : &Vec<usize>) -> Vec<usize>{
@@ -43,6 +69,161 @@ impl RosenblattClassifier{
         println!("Cat    : {:?}", self.cat.get_weight());
         println!("Lion   : {:?}", self.lion.get_weight());
         println!("Cheetah: {:?}", self.cheetah.get_weight());
+    }
+
+    pub fn get_all_weight_vec(&mut self) -> Vec<f32> {
+        let mut all_weights = Vec::new();
+        all_weights.extend_from_slice(&self.cat.get_weight().data);
+        all_weights.extend_from_slice(&self.lion.get_weight().data);
+        all_weights.extend_from_slice(&self.cheetah.get_weight().data);
+        all_weights
+    }
+
+    pub fn get_all_params(&self){
+        println!("Cat    -> learning_rate: {}, bias: {}", self.cat.get_learning_rate(), self.cat.get_bias());
+        println!("Lion   -> learning_rate: {}, bias: {}", self.lion.get_learning_rate(), self.lion.get_bias());
+        println!("Cheetah-> learning_rate: {}, bias: {}", self.cheetah.get_learning_rate(), self.cheetah.get_bias());
+    }
+
+    // File format:
+    //   [4 bytes] magic number "RBLC"
+    //   [4 bytes] format version (u32 little-endian, currently 1)
+    //
+    //   Repeated 3 times (Cat, Cheetah, Lion):
+    //     [8 bytes] random seed (u64 little-endian)
+    //     [4 bytes] learning rate (f32 little-endian)
+    //     [4 bytes] bias (f32 little-endian)
+    //     [4 bytes] weights.rows (u32)
+    //     [4 bytes] weights.cols (u32)
+    //     [weights.rows × weights.cols × 4 bytes]
+    //         weights data (f32 each)
+    pub fn save(&self, path: &str, seeds: [u64; 3]) -> Result<(), String> {
+        let mut file = match File::create(path) {
+            Ok(f) => f,
+            Err(e) => return Err(format!("Failed to create {}: {}", path, e)),
+        };
+
+        if let Err(e) = file.write_all(b"RBLC") {
+            return Err(format!("write failed: {}", e));
+        }
+
+        let version: u32 = 1;
+        if let Err(e) = file.write_all(&version.to_le_bytes()) {
+            return Err(format!("write failed: {}", e));
+        }
+
+        let rosenblatts = [&self.cat, &self.cheetah, &self.lion];
+        for (i, r) in rosenblatts.iter().enumerate() {
+            if let Err(e) = file.write_all(&seeds[i].to_le_bytes()) {
+                return Err(format!("write failed: {}", e));
+            }
+            if let Err(e) = file.write_all(&r.learning_rate.to_le_bytes()) {
+                return Err(format!("write failed: {}", e));
+            }
+            if let Err(e) = file.write_all(&r.bias.to_le_bytes()) {
+                return Err(format!("write failed: {}", e));
+            }
+
+            let w_rows = r.weights.rows as u32;
+            let w_cols = r.weights.cols as u32;
+            if let Err(e) = file.write_all(&w_rows.to_le_bytes()) {
+                return Err(format!("write failed: {}", e));
+            }
+            if let Err(e) = file.write_all(&w_cols.to_le_bytes()) {
+                return Err(format!("write failed: {}", e));
+            }
+            for &value in &r.weights.data {
+                if let Err(e) = file.write_all(&value.to_le_bytes()) {
+                    return Err(format!("write failed: {}", e));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+
+    pub fn load(path: &str) -> Result<(RosenblattClassifier, [u64; 3]), String> {
+        let mut file = match File::open(path) {
+            Ok(f) => f,
+            Err(e) => return Err(format!("Failed to open {}: {}", path, e)),
+        };
+
+        let read_u32 = |file: &mut File| -> Result<u32, String> {
+            let mut buf = [0u8; 4];
+            if let Err(e) = file.read_exact(&mut buf) {
+                return Err(format!("read failed: {}", e));
+            }
+            Ok(u32::from_le_bytes(buf))
+        };
+        let read_u64 = |file: &mut File| -> Result<u64, String> {
+            let mut buf = [0u8; 8];
+            if let Err(e) = file.read_exact(&mut buf) {
+                return Err(format!("read failed: {}", e));
+            }
+            Ok(u64::from_le_bytes(buf))
+        };
+        let read_f32 = |file: &mut File| -> Result<f32, String> {
+            let mut buf = [0u8; 4];
+            if let Err(e) = file.read_exact(&mut buf) {
+                return Err(format!("read failed: {}", e));
+            }
+            Ok(f32::from_le_bytes(buf))
+        };
+
+        let mut magic = [0u8; 4];
+        if let Err(e) = file.read_exact(&mut magic) {
+            return Err(format!("read failed: {}", e));
+        }
+        if &magic != b"RBLC" {
+            return Err(format!("Not a RosenblattClassifier file: bad magic number {:?}", magic));
+        }
+
+        // Format version
+        let version = read_u32(&mut file)?;
+        if version != 1 {
+            return Err(format!(
+                "Unsupported RosenblattClassifier file version: {} (this build supports version 1)",
+                version
+            ));
+        }
+
+        let mut rosenblatts: Vec<Rosenblatt> = Vec::new();
+        let mut seeds: Vec<u64> = Vec::new();
+
+        for _ in 0..3 {
+            let seed = read_u64(&mut file)?;
+            let learning_rate = read_f32(&mut file)?;
+            let bias = read_f32(&mut file)?;
+
+            let w_rows = read_u32(&mut file)? as usize;
+            let w_cols = read_u32(&mut file)? as usize;
+            let mut w_data = Vec::with_capacity(w_rows * w_cols);
+            for _ in 0..(w_rows * w_cols) {
+                w_data.push(read_f32(&mut file)?);
+            }
+            let weights = Matrix::from_vec(w_data, w_rows, w_cols);
+
+            seeds.push(seed);
+            rosenblatts.push(Rosenblatt {
+                learning_rate,
+                weights,
+                bias,
+            });
+        }
+
+        let lion = rosenblatts.pop().unwrap();
+        let cheetah = rosenblatts.pop().unwrap();
+        let cat = rosenblatts.pop().unwrap();
+
+        let seed_cheetah = seeds.pop().unwrap();
+        let seed_lion = seeds.pop().unwrap();
+        let seed_cat = seeds.pop().unwrap();
+
+        Ok((
+            RosenblattClassifier { cat, lion, cheetah },
+            [seed_cat, seed_cheetah, seed_lion],
+        ))
     }
 }
 
@@ -150,5 +331,80 @@ pub extern "C" fn transforming(classifier: *mut RosenblattClassifier,
 pub extern "C" fn release_matrix(matrix: *mut Matrix){
     unsafe {
         let _ = Box::from_raw(matrix);
+    }
+}
+
+
+#[unsafe(no_mangle)]
+pub extern "C" fn get_weights_classifier(
+    classifier: *mut RosenblattClassifier,
+) -> *mut f32 {
+    unsafe {
+        let classifier = match classifier.as_mut() {
+            Some(c) => c,
+            None => return std::ptr::null_mut(),
+        };
+
+        let mut all_weights = classifier.get_all_weight_vec();
+        all_weights.shrink_to_fit();
+        all_weights.leak().as_mut_ptr()
+    }
+}
+
+#[repr(C)]
+pub struct EvalHistoryFFI {
+    train_cat: *mut f32,
+    test_cat: *mut f32,
+    train_lion: *mut f32,
+    test_lion: *mut f32,
+    train_cheetah: *mut f32,
+    test_cheetah: *mut f32,
+    epochs: usize,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn train_classifier_with_eval(
+    classifier: *mut RosenblattClassifier,
+    x: *const f32,
+    rows: usize,
+    cols: usize,
+    y: *const usize,
+    y_len: usize,
+    x_test: *const f32,
+    test_rows: usize,
+    y_test: *const usize,
+    y_test_len: usize,
+    epochs: usize,
+) -> *mut EvalHistoryFFI {
+    unsafe {
+        let classifier = match classifier.as_mut() {
+            Some(c) => c,
+            None => return std::ptr::null_mut(),
+        };
+
+        let x_matrix = Matrix::from_vec(std::slice::from_raw_parts(x, rows * cols).to_vec(), rows, cols);
+        let y_vec = std::slice::from_raw_parts(y, y_len).to_vec();
+        let x_test_matrix = Matrix::from_vec(std::slice::from_raw_parts(x_test, test_rows * cols).to_vec(), test_rows, cols);
+        let y_test_vec = std::slice::from_raw_parts(y_test, y_test_len).to_vec();
+
+        let (
+            (mut cat_tr, mut cat_te),
+            (mut lion_tr, mut lion_te),
+            (mut ch_tr, mut ch_te),
+        ) = classifier.train_with_eval(&x_matrix, &y_vec, &x_test_matrix, &y_test_vec, epochs);
+
+        cat_tr.shrink_to_fit();  cat_te.shrink_to_fit();
+        lion_tr.shrink_to_fit(); lion_te.shrink_to_fit();
+        ch_tr.shrink_to_fit();   ch_te.shrink_to_fit();
+
+        Box::into_raw(Box::new(EvalHistoryFFI {
+            train_cat: cat_tr.leak().as_mut_ptr(),
+            test_cat: cat_te.leak().as_mut_ptr(),
+            train_lion: lion_tr.leak().as_mut_ptr(),
+            test_lion: lion_te.leak().as_mut_ptr(),
+            train_cheetah: ch_tr.leak().as_mut_ptr(),
+            test_cheetah: ch_te.leak().as_mut_ptr(),
+            epochs,
+        }))
     }
 }
