@@ -136,47 +136,71 @@ impl Dataset {
         })
     }
 
-    // Splits this dataset into a training and test set.
+    // Splits this dataset into a training and test set, stratified by class.
+    // Each class contributes the same proportion (test_ratio) to the test set,
+    // so class balance is preserved in both splits.
     // Same RNG seed -> same split, for reproducible reports.
     pub fn train_test_split(&self, test_ratio: f32, seed: u64) -> (Dataset, Dataset) {
         let n = self.len();
-        let indices = shuffled_indices(n, seed);
-
-        let n_test = (n as f32 * test_ratio) as usize;
         let n_features = self.x.cols;
+        let n_classes = self.num_classes();
+
+        let mut indices_by_class: Vec<Vec<usize>> = Vec::new();
+        for _ in 0..n_classes {
+            indices_by_class.push(Vec::new());
+        }
+        for i in 0..n {
+            indices_by_class[self.labels[i]].push(i);
+        }
 
         let mut train_data = Vec::new();
         let mut train_labels = Vec::new();
         let mut test_data = Vec::new();
         let mut test_labels = Vec::new();
 
-        for (k, &original_index) in indices.iter().enumerate() {
-            let mut row = Vec::new();
-            for j in 0..n_features {
-                row.push(self.x.get(original_index, j));
-            }
-            let label = self.labels[original_index];
+        for (class, class_indices) in indices_by_class.iter().enumerate() {
+            let m = class_indices.len();
+            // Use a seed derived in a way that avoids collisions between
+            // adjacent global seeds and different classes (a large odd
+            // multiplier avoids simple "seed+class" aliasing).
+            let class_seed = seed
+                .wrapping_mul(1_000_003)
+                .wrapping_add(class as u64 * 7919);
+            let order = shuffled_indices(m, class_seed);
+            let n_test = ((m as f32) * test_ratio).round() as usize;
 
-            if k < n_test {
-                test_data.extend(row);
-                test_labels.push(label);
-            } else {
-                train_data.extend(row);
-                train_labels.push(label);
+            for (k, &pos) in order.iter().enumerate() {
+                let original_index = class_indices[pos];
+
+                let mut row = Vec::new();
+                for j in 0..n_features {
+                    row.push(self.x.get(original_index, j));
+                }
+                let label = self.labels[original_index];
+
+                if k < n_test {
+                    test_data.extend(row);
+                    test_labels.push(label);
+                } else {
+                    train_data.extend(row);
+                    train_labels.push(label);
+                }
             }
         }
 
+        let n_test_total = test_labels.len();
+        let n_train_total = train_labels.len();
+
         let train = Dataset {
-            x: Matrix::from_vec(train_data, n - n_test, n_features),
+            x: Matrix::from_vec(train_data, n_train_total, n_features),
             labels: train_labels,
             class_names: self.class_names.clone(),
         };
         let test = Dataset {
-            x: Matrix::from_vec(test_data, n_test, n_features),
+            x: Matrix::from_vec(test_data, n_test_total, n_features),
             labels: test_labels,
             class_names: self.class_names.clone(),
         };
-
         (train, test)
     }
 }
@@ -222,16 +246,10 @@ pub fn load_or_build(
 ///   root/
 ///     class_a/ *.jpg
 ///     class_b/ *.jpg
-///     class_c/ *.jpg
 ///
-/// Parameters:
-/// - `root`: path to the parent folder containing the class subfolders.
-/// - `samples_per_class`: optional cap on how many images to load per class.
-///                        Use `None` to load all of them.
-/// - `feature_extractor`: function that turns a loaded image into a feature vector.
-///                        Pass `flatten` for raw pixels or `extract` for engineered
-///                        features. Any function with the right signature works —
-///                        the library doesn't care what features you choose.
+/// `samples_per_class` caps how many images to load per class (None = all).
+/// `feature_extractor` converts a LoadedImage into a feature vector —
+///                       the library doesn't care what features you choose.
 ///
 /// Returns a Dataset whose `class_names` reflects the folders found.
 /// Files that fail to load are skipped with a warning.
@@ -408,10 +426,51 @@ mod tests {
 
     #[test]
     fn test_split_sizes() {
-        let ds = make_dummy_dataset(100, 5, 3);
-        let (train, test) = ds.train_test_split(0.2, 42);
-        assert_eq!(train.len(), 80);
-        assert_eq!(test.len(), 20);
+        // With stratified splitting the total test size is the sum of
+        // several independent per-class roundings, so it can differ from
+        // a single global rounding by a couple of examples. We check it's
+        // close, and that every example ends up in exactly one split.
+        let dataset = make_dummy_dataset(100, 3, 3);
+        let (train, test) = dataset.train_test_split(0.2, 42);
+
+        let n = dataset.len();
+        let expected_test = (n as f32 * 0.2).round() as usize;
+
+        assert_eq!(train.len() + test.len(), n, "no examples should be lost or duplicated");
+        assert!(
+            (test.len() as i64 - expected_test as i64).abs() <= 3,
+            "test size {} should be close to expected {}",
+            test.len(), expected_test
+        );
+    }
+
+    #[test]
+    fn test_split_different_seeds_differ() {
+        let dataset = make_dummy_dataset(100, 3, 3);
+        let (_, test_a) = dataset.train_test_split(0.2, 42);
+        let (_, test_b) = dataset.train_test_split(0.2, 43);
+
+        assert_ne!(
+            test_a.x.data, test_b.x.data,
+            "different seeds should select different examples"
+        );
+    }
+
+    #[test]
+    fn test_split_is_stratified() {
+        // Every class present in the full dataset should also be present
+        // in both the train and test splits — that's the whole point of
+        // stratifying rather than shuffling the pooled dataset.
+        let dataset = make_dummy_dataset(90, 3, 3);
+        let (train, test) = dataset.train_test_split(0.2, 42);
+
+        let n_classes = dataset.num_classes();
+        for class in 0..n_classes {
+            let in_train = train.labels.iter().any(|&l| l == class);
+            let in_test = test.labels.iter().any(|&l| l == class);
+            assert!(in_train, "class {} missing from train split", class);
+            assert!(in_test, "class {} missing from test split", class);
+        }
     }
 
     #[test]
@@ -421,14 +480,6 @@ mod tests {
         let (train_b, test_b) = ds.train_test_split(0.2, 42);
         assert_eq!(train_a.labels, train_b.labels);
         assert_eq!(test_a.labels, test_b.labels);
-    }
-
-    #[test]
-    fn test_split_different_seeds_differ() {
-        let ds = make_dummy_dataset(50, 3, 3);
-        let (_, test_a) = ds.train_test_split(0.2, 42);
-        let (_, test_b) = ds.train_test_split(0.2, 7);
-        assert_ne!(test_a.labels, test_b.labels);
     }
 
     #[test]

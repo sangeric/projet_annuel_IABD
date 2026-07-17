@@ -193,7 +193,7 @@ impl Rosenblatt {
         Matrix::from_vec(xk, 1, x_with_bias.cols)
     }
 
-    pub fn fetch_accuracy(epochs: usize, successes: Vec<f32>, nb_sample: f32){
+    pub fn fetch_accuracy(_epochs: usize, successes: Vec<f32>, nb_sample: f32){
         for i in 0..successes.len() {
             println!(
                 "Epoch {:>4} | Success: {:>4} | Accuracy: {:>6.2}%",
