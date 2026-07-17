@@ -24,6 +24,53 @@ ffi.cdef("""
     int rbfn_save(const void* model, const char* path);
     void* rbfn_load(const char* path);
     void rbfn_destroy(void* model);
+    
+    void* create_rosenblatt_classifier(
+        size_t n_features,
+        float learning_rate,
+        float bias_cat,
+        float bias_lion,
+        float bias_cheetah,
+        uint64_t seed
+    );
+    void train_classifier(
+        void* classifier,
+        const float* x,
+        size_t rows,
+        size_t cols,
+        const size_t* y,
+        size_t y_len,
+        size_t epochs
+    );
+    size_t* predict_classifier(
+        void* classifier,
+        const float* x,
+        size_t rows,
+        size_t cols,
+        const size_t* y,
+        size_t y_len
+    );
+    float* get_weights_classifier(void* classifier);
+
+    typedef struct {
+        float bias;
+        float learning_rate;
+    } RosenblattParams;
+
+    typedef struct RosenblattClassifier RosenblattClassifier;
+
+    RosenblattClassifier* rosenblatt_load(
+        const char* path,
+        uint64_t* out_seeds,
+        RosenblattParams* out_params,
+        size_t* out_rows,
+        size_t* out_cols,
+        float* out_cat_weights,
+        float* out_lion_weights,
+        float* out_cheetah_weights
+    );
+    int rosenblatt_save(const void* classifier, const char* path, const uint64_t* seeds);
+    
 """, override=True)
 
 BASE = os.path.abspath("felidae_classifier")
@@ -41,7 +88,7 @@ N_FEATURES = 20
 N_FLATTEN = 3072
 IMG_SIZE = (32, 32)
 DATASET_ROOT = os.path.join(BASE, "dataset_clean")
-
+DATASET_ROOT_NOTCLEANED = os.path.join(BASE, "dataset")
 
 # --- Metadata helpers ---
 # Each model stores its own metadata (which feature mode it was trained with,
@@ -109,6 +156,40 @@ def load_dataset(max_samples=3000, use_extract=True):
         Y_onehot[i][label] = 1
     return X, Y_onehot
 
+
+# --- Dataset loading for linear ---
+def load_dataset_linear(max_samples=3000, use_extract=True):
+    class_folders = {"cat": 0, "lion": 1, "cheetah": 2}
+    X, Y = [], []
+    for folder, label in class_folders.items():
+        folder_path = os.path.join(DATASET_ROOT_NOTCLEANED, folder)
+        if not os.path.exists(folder_path):
+            continue
+        files = [f for f in os.listdir(folder_path) if f.lower().endswith((".jpg", ".png"))]
+        files = files[:max_samples]
+        for fname in files:
+            try:
+                img = Image.open(os.path.join(folder_path, fname)).convert("RGB").resize(IMG_SIZE)
+                arr = np.array(img, dtype=np.float32).flatten() / 255.0
+                arr = np.ascontiguousarray(arr, dtype=np.float32)
+
+                if use_extract:
+                    out = ffi.new("float[]", N_FEATURES)
+                    lib.extract_features(ffi.from_buffer("float[]", arr), out, N_FEATURES)
+                    features = np.array([out[i] for i in range(N_FEATURES)], dtype=np.float32)
+                else:
+                    features = arr
+
+                X.append(features)
+                Y.append(label)
+            except Exception as e:
+                print(f"Failed on {fname}: {e}")
+                continue
+
+    X = np.array(X, dtype=np.float32)
+    Y = np.array(Y, dtype=np.uint32)
+
+    return X, Y
 
 def train_and_save_mlp(epochs, learning_rate, max_samples_per_class, hidden_layers_str, feature_mode, progress=gr.Progress()):
     use_extract = "Extract" in feature_mode
@@ -284,6 +365,114 @@ def predict_rbfn(X):
     return scores, None
 
 
+def train_and_save_rosenblatt(epochs, learning_rate, max_samples_per_class, feature_mode, seed, progress=gr.Progress()):
+    use_extract = "Extract" in feature_mode
+    n_features = N_FEATURES if use_extract else N_FLATTEN
+
+    progress(0, desc="Loading dataset...")
+    X, Y = load_dataset_linear(max_samples=int(max_samples_per_class), use_extract=use_extract)
+    if len(X) == 0:
+        return "No dataset found at: " + DATASET_ROOT
+
+    # hold out 20% as a test set
+    rng = np.random.default_rng(42)
+    idx = rng.permutation(len(X))
+    split = int(0.8 * len(X))
+    train_idx, test_idx = idx[:split], idx[split:]
+    X_train, Y_train = X[train_idx], Y[train_idx]
+    X_test, Y_test = X[test_idx], Y[test_idx]
+
+    progress(0.1, desc="Creating classifier...")
+    classifier = lib.create_rosenblatt_classifier(
+        n_features, float(learning_rate),
+        0.0, 0.0, 0.0,
+        int(seed)
+    )
+    if classifier == ffi.NULL:
+        return "Failed to create Rosenblatt classifier"
+
+    X_c = np.ascontiguousarray(X_train, dtype=np.float32)
+    Y_c = np.ascontiguousarray(Y_train, dtype=np.uint64)
+
+    progress(0.2, desc=f"Training {int(epochs)} epochs at lr={learning_rate}...")
+    lib.train_classifier(
+        classifier,
+        ffi.from_buffer("float[]", X_c), X_c.shape[0], X_c.shape[1],
+        ffi.from_buffer("size_t[]", Y_c), len(Y_c),
+        int(epochs)
+    )
+
+    def acc(Xset, Yset):
+        Xc = np.ascontiguousarray(Xset, dtype=np.float32)
+        Yc = np.ascontiguousarray(Yset, dtype=np.uint64)
+        preds_ptr = lib.predict_classifier(
+            classifier,
+            ffi.from_buffer("float[]", Xc), Xc.shape[0], Xc.shape[1],
+            ffi.from_buffer("size_t[]", Yc), len(Yc)
+        )
+        preds = np.array([preds_ptr[i] for i in range(Xc.shape[0])])
+        return float(np.mean(preds == Yset) * 100.0)
+
+    train_acc = acc(X_train, Y_train)
+    test_acc = acc(X_test, Y_test)
+
+    save_path = os.path.join(MODEL_DIR, "linear", "rosenblatt.bin").encode()
+    seeds_buf = ffi.new("uint64_t[3]", [int(seed), int(seed), int(seed)])
+    ret = lib.rosenblatt_save(classifier, save_path, seeds_buf)
+
+    if ret != 0:
+        return "Training done but save failed"
+
+    save_model_meta("linear", {"feature_mode": feature_mode, "seed": int(seed)})
+    progress(1.0, desc="Done")
+    return (
+        f"Training complete.\n"
+        f"Input mode    : {feature_mode}\n"
+        f"Features      : {n_features}\n"
+        f"Epochs        : {int(epochs)}\n"
+        f"Learning rate : {learning_rate}\n"
+        f"Samples       : {len(X_train)} train / {len(X_test)} test\n"
+        f"Train accuracy: {train_acc:.1f}%\n"
+        f"Test accuracy : {test_acc:.1f}%\n"
+        f"Saved to      : {save_path.decode()}"
+    )
+
+
+N_LINEAR_MAX = 3072
+
+def predict_rosenblatt(X):
+    model_path = os.path.join(MODEL_DIR, "linear", "rosenblatt.bin")
+    if not os.path.exists(model_path):
+        return None, "No trained Linear (Rosenblatt) model found — train it first in the Train tab"
+
+    seeds = ffi.new("uint64_t[3]")
+    params = ffi.new("RosenblattParams*")
+    rows = ffi.new("size_t*")
+    cols = ffi.new("size_t*")
+    cat_w = ffi.new("float[]", N_LINEAR_MAX)
+    lion_w = ffi.new("float[]", N_LINEAR_MAX)
+    cheetah_w = ffi.new("float[]", N_LINEAR_MAX)
+
+    classifier_ptr = lib.rosenblatt_load(
+        model_path.encode(), seeds, params, rows, cols,
+        cat_w, lion_w, cheetah_w
+    )
+    if classifier_ptr == ffi.NULL:
+        return None, "Failed to load Rosenblatt classifier"
+
+    Xc = np.ascontiguousarray(X, dtype=np.float32)
+    dummy_y = np.zeros(1, dtype=np.uint64)
+
+    preds_ptr = lib.predict_classifier(
+        ffi.cast("void*", classifier_ptr),
+        ffi.from_buffer("float[]", Xc), 1, Xc.shape[1],
+        ffi.from_buffer("size_t[]", dummy_y), 1
+    )
+
+    predicted = int(preds_ptr[0])
+    scores = {name: (1.0 if i == predicted else 0.0) for i, name in enumerate(CLASS_NAMES)}
+    return scores, None
+
 def predict(pil_image, model_choice):
     if pil_image is None:
         return None, "Please upload an image"
@@ -298,6 +487,11 @@ def predict(pil_image, model_choice):
         use_extract = "Extract" in meta["feature_mode"]
         X = preprocess(pil_image, use_extract=use_extract)
         return predict_rbfn(X)
+    elif model_choice == "Linear (Rosenblatt)":
+        meta = load_model_meta("linear")
+        use_extract = "Extract" in meta["feature_mode"]
+        X = preprocess(pil_image, use_extract=use_extract)
+        return predict_rosenblatt(X)
     else:
         return None, f"{model_choice} not yet implemented"
 
@@ -326,7 +520,12 @@ def check_model_status():
     else:
         lines.append("❌ RBFN — not trained")
 
-    lines.append("❌ Linear (Rosenblatt) — not yet implemented")
+    linear_path = os.path.join(MODEL_DIR, "linear", "rosenblatt.bin")
+    if os.path.exists(linear_path):
+        mode = load_model_meta("linear")["feature_mode"]
+        lines.append(f"✅ Linear (Rosenblatt) — ready ({mode})")
+    else:
+        lines.append("❌ Linear (Rosenblatt) — not trained")
     lines.append("❌ SVM — not yet implemented")
     return "\n".join(lines)
 
@@ -448,6 +647,32 @@ with gr.Blocks(title="Felidae Classifier") as demo:
                         fn=train_and_save_rbfn,
                         inputs=[rbfn_k_slider, rbfn_gamma_slider, rbfn_iters_slider, rbfn_sample_slider, rbfn_feature_mode],
                         outputs=rbfn_train_output
+                    )
+                with gr.Tab("Linear (Rosenblatt)"):
+                    gr.Markdown("### Train and save a Rosenblatt classifier")
+                    gr.Markdown("Three perceptrons (one-vs-all) trained on cat / lion / cheetah.")
+
+                    with gr.Row():
+                        with gr.Column():
+                            lin_feature_mode = gr.Radio(
+                                choices=["Extract (20 features)", "Flatten (3072 pixels)"],
+                                value="Extract (20 features)",
+                                label="Input mode"
+                            )
+                            lin_seed = gr.Number(value=42, label="Seed", precision=0)
+
+                        with gr.Column():
+                            lin_epochs = gr.Slider(minimum=10, maximum=10000, value=500, step=10, label="Epochs")
+                            lin_lr = gr.Slider(minimum=0.0001, maximum=0.5, value=0.01, step=0.0001, label="Learning rate")
+                            lin_samples = gr.Slider(minimum=100, maximum=5000, value=3000, step=100, label="Max samples per class")
+
+                    lin_train_btn = gr.Button("Train Rosenblatt", variant="primary")
+                    lin_train_output = gr.Textbox(label="Training log", interactive=False, lines=8)
+
+                    lin_train_btn.click(
+                        fn=train_and_save_rosenblatt,
+                        inputs=[lin_epochs, lin_lr, lin_samples, lin_feature_mode, lin_seed],
+                        outputs=lin_train_output
                     )
 
         with gr.Tab("📊 Status"):

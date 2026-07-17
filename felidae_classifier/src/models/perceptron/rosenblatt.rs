@@ -254,7 +254,7 @@ impl Rosenblatt {
         let mut argmax = Vec::new();
 
         for i in 0..cat.len() {
-            let scores = [cat[i], cheetah[i], lion[i]];
+            let scores = [cat[i], lion[i],cheetah[i]];
             let max = Self::max_argmax(scores);
             argmax.push(max);
         }
