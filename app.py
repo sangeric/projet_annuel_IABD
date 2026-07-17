@@ -33,7 +33,7 @@ ffi.cdef("""
         float bias_cheetah,
         uint64_t seed
     );
-    void train_classifier(
+    void train_classifier_rosen(
         void* classifier,
         const float* x,
         size_t rows,
@@ -395,7 +395,7 @@ def train_and_save_rosenblatt(epochs, learning_rate, max_samples_per_class, feat
     Y_c = np.ascontiguousarray(Y_train, dtype=np.uint64)
 
     progress(0.2, desc=f"Training {int(epochs)} epochs at lr={learning_rate}...")
-    lib.train_classifier(
+    lib.train_classifier_rosen(
         classifier,
         ffi.from_buffer("float[]", X_c), X_c.shape[0], X_c.shape[1],
         ffi.from_buffer("size_t[]", Y_c), len(Y_c),
