@@ -86,7 +86,7 @@ fn main() {
     print_confusion_matrix(&matrix, &dataset.class_names);
     */
     
-    /*
+
     println!("\n=== Rosenblatt (one-vs-rest) ===\n");
     let epochs = 100;
     let learning_rate = 0.01;
@@ -106,7 +106,7 @@ fn main() {
     );
 
     classifier_rosen
-        .save("saved_models/rosenblatt.bin", [seed, seed + 200, seed + 400])
+        .save("saved_models/linear/rosenblatt.bin", [seed, seed + 200, seed + 400])
         .expect("Erreur lors de la sauvegarde du modèle");
 
     println!("\n=== Prédiction sur le jeu de test ===\n");
@@ -117,12 +117,12 @@ fn main() {
     print_confusion_matrix(&matrix, &dataset.class_names);
 
     println!("lancement du chargement de load");
-    let (mut classifier_rosen_save, seeds) = RosenblattClassifier::load("saved_models/rosenblatt.bin")
+    let (mut classifier_rosen_save, seeds) = RosenblattClassifier::load("saved_models/linear/rosenblatt.bin")
         .expect("Erreur lors du chargement du modèle");
 
     println!("Seeds chargées : {:?}", seeds);
     classifier_rosen.get_all_params();
     classifier_rosen.get_all_weight();
-    */
+
 
 }

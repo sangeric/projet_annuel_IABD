@@ -3,6 +3,9 @@ use crate::tensor::Matrix;
 use std::fs::File;
 use std::io::{Read, Write};
 
+use std::os::raw::c_char;
+use std::ffi::CStr;
+
 impl RosenblattClassifier{
     pub fn new(n_features: usize, learning_rate : f32, bias_cat: f32, bias_lion: f32, bias_cheetah: f32, seed: u64) -> Self{
 
@@ -19,8 +22,8 @@ impl RosenblattClassifier{
 
     pub fn train(&mut self, x : &Matrix, y : &Vec<usize> , epochs : usize){
         let y_cat = Rosenblatt::to_binary_labels(y, 0);
-        let y_cheetah = Rosenblatt::to_binary_labels(y, 1);
-        let y_lion = Rosenblatt::to_binary_labels(y, 2);
+        let y_cheetah = Rosenblatt::to_binary_labels(y, 2);
+        let y_lion = Rosenblatt::to_binary_labels(y, 1);
 
 
         self.cat.train(x, &y_cat, epochs);
@@ -58,6 +61,7 @@ impl RosenblattClassifier{
 
         let tab_argmax:Vec<usize> = Rosenblatt::argmax(&cat_predict, &lion_predict, &cheetah_predict);
         Rosenblatt::print_prediction_result(&tab_argmax, y);
+        println!("test {:?}", tab_argmax);
         tab_argmax
     }
 
@@ -179,7 +183,6 @@ impl RosenblattClassifier{
             return Err(format!("Not a RosenblattClassifier file: bad magic number {:?}", magic));
         }
 
-        // Format version
         let version = read_u32(&mut file)?;
         if version != 1 {
             return Err(format!(
@@ -348,59 +351,95 @@ pub extern "C" fn get_weights_classifier(
 }
 
 #[repr(C)]
-pub struct EvalHistoryFFI {
-    train_cat: *mut f32,
-    test_cat: *mut f32,
-    train_lion: *mut f32,
-    test_lion: *mut f32,
-    train_cheetah: *mut f32,
-    test_cheetah: *mut f32,
-    epochs: usize,
+pub struct RosenblattParams {
+    pub bias: f32,
+    pub learning_rate: f32,
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn train_classifier_with_eval(
-    classifier: *mut RosenblattClassifier,
-    x: *const f32,
-    rows: usize,
-    cols: usize,
-    y: *const usize,
-    y_len: usize,
-    x_test: *const f32,
-    test_rows: usize,
-    y_test: *const usize,
-    y_test_len: usize,
-    epochs: usize,
-) -> *mut EvalHistoryFFI {
-    unsafe {
-        let classifier = match classifier.as_mut() {
-            Some(c) => c,
-            None => return std::ptr::null_mut(),
-        };
+#[no_mangle]
+pub extern "C" fn rosenblatt_load(
+    path: *const c_char,
+    out_seeds: *mut u64,
+    out_params: *mut RosenblattParams,
+    out_rows: *mut usize,
+    out_cols: *mut usize,
+    out_cat_weights: *mut f32,
+    out_lion_weights: *mut f32,
+    out_cheetah_weights: *mut f32,
+) -> *mut RosenblattClassifier {
+    let path = unsafe { CStr::from_ptr(path).to_str().unwrap_or("") };
 
-        let x_matrix = Matrix::from_vec(std::slice::from_raw_parts(x, rows * cols).to_vec(), rows, cols);
-        let y_vec = std::slice::from_raw_parts(y, y_len).to_vec();
-        let x_test_matrix = Matrix::from_vec(std::slice::from_raw_parts(x_test, test_rows * cols).to_vec(), test_rows, cols);
-        let y_test_vec = std::slice::from_raw_parts(y_test, y_test_len).to_vec();
+    match RosenblattClassifier::load(path) {
+        Ok((classifier, seeds)) => {
+            if !out_seeds.is_null() {
+                unsafe {
+                    std::ptr::copy_nonoverlapping(seeds.as_ptr(), out_seeds, 3);
+                }
+            }
 
-        let (
-            (mut cat_tr, mut cat_te),
-            (mut lion_tr, mut lion_te),
-            (mut ch_tr, mut ch_te),
-        ) = classifier.train_with_eval(&x_matrix, &y_vec, &x_test_matrix, &y_test_vec, epochs);
+            if !out_params.is_null() {
+                let params = RosenblattParams {
+                    bias: classifier.cat.bias,
+                    learning_rate: classifier.cat.learning_rate,
+                };
+                unsafe {
+                    std::ptr::write(out_params, params);
+                }
+            }
 
-        cat_tr.shrink_to_fit();  cat_te.shrink_to_fit();
-        lion_tr.shrink_to_fit(); lion_te.shrink_to_fit();
-        ch_tr.shrink_to_fit();   ch_te.shrink_to_fit();
+            if !out_rows.is_null() {
+                unsafe { *out_rows = classifier.cat.weights.rows; }
+            }
+            if !out_cols.is_null() {
+                unsafe { *out_cols = classifier.cat.weights.cols; }
+            }
 
-        Box::into_raw(Box::new(EvalHistoryFFI {
-            train_cat: cat_tr.leak().as_mut_ptr(),
-            test_cat: cat_te.leak().as_mut_ptr(),
-            train_lion: lion_tr.leak().as_mut_ptr(),
-            test_lion: lion_te.leak().as_mut_ptr(),
-            train_cheetah: ch_tr.leak().as_mut_ptr(),
-            test_cheetah: ch_te.leak().as_mut_ptr(),
-            epochs,
-        }))
+            if !out_cat_weights.is_null() {
+                let data = &classifier.cat.weights.data;
+                unsafe {
+                    std::ptr::copy_nonoverlapping(data.as_ptr(), out_cat_weights, data.len());
+                }
+            }
+            if !out_lion_weights.is_null() {
+                let data = &classifier.lion.weights.data;
+                unsafe {
+                    std::ptr::copy_nonoverlapping(data.as_ptr(), out_lion_weights, data.len());
+                }
+            }
+            if !out_cheetah_weights.is_null() {
+                let data = &classifier.cheetah.weights.data;
+                unsafe {
+                    std::ptr::copy_nonoverlapping(data.as_ptr(), out_cheetah_weights, data.len());
+                }
+            }
+
+            Box::into_raw(Box::new(classifier))
+        }
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+
+#[no_mangle]
+pub extern "C" fn rosenblatt_save(
+    classifier: *const RosenblattClassifier,
+    path: *const c_char,
+    seeds: *const u64,
+) -> i32 {
+    if classifier.is_null() || path.is_null() || seeds.is_null() {
+        return -1;
+    }
+
+    let classifier = unsafe { &*classifier };
+    let path = match unsafe { CStr::from_ptr(path) }.to_str() {
+        Ok(p) => p,
+        Err(_) => return -1,
+    };
+
+    let seeds_arr: [u64; 3] = unsafe { [*seeds, *seeds.add(1), *seeds.add(2)] };
+
+    match classifier.save(path, seeds_arr) {
+        Ok(()) => 0,
+        Err(_) => -1,
     }
 }
