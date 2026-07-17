@@ -77,7 +77,7 @@ def features_from_image(path):
 
 
 def load_felidae(max_per_class):
-    class_folders = {"cat": 0, "lion": 1, "cheetah": 2}
+    class_folders = {"cat": 0, "cheetah": 1, "lion": 2}
     X, Y = [], []
     for folder, label in class_folders.items():
         folder_path = os.path.join(DATASET_ROOT, folder)
