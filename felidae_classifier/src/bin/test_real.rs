@@ -3,11 +3,11 @@
 use felidae_classifier::features::scaler::StandardScaler;
 use felidae_classifier::features::flatten::flatten;
 use felidae_classifier::features::extract::extract;
-use felidae_classifier::models::mlp::MLP;
+// use felidae_classifier::models::mlp::MLP;
 use felidae_classifier::models::rbfn::RBFN;
 use felidae_classifier::models::svm::kernel::Kernel;
 use felidae_classifier::models::svm::multiclass::MulticlassSVM;
-use felidae_classifier::models::perceptron::RosenblattClassifier;
+// use felidae_classifier::models::perceptron::RosenblattClassifier;
 use felidae_classifier::data::load_or_build;
 use felidae_classifier::data::one_hot_encode;
 use felidae_classifier::training::metrics::{confusion_matrix, print_confusion_matrix};

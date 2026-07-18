@@ -186,14 +186,14 @@ fn main() {
     println!("\n\n############## SVM ##############");
 
     println!("\n=== SVM (RBF kernel) on Dataset 1 (linearly separable) ===\n");
-    let svm_rbf1 = MulticlassSVM::train(&x_linear, &y_linear, 3, Kernel::Rbf { gamma: 2.0 });
+    let svm_rbf1 = MulticlassSVM::train(&x_linear, &y_linear, 3, Kernel::Rbf { gamma: 2.0 }, f32::INFINITY);
     let svm_preds1 = svm_rbf1.predict(&x_linear);
     println!("\nResults:");
     print_predictions(&svm_preds1, &y_linear);
     println!("Final accuracy: {:.1}%", svm_rbf1.accuracy(&x_linear, &y_linear) * 100.0);
 
     println!("\n=== SVM (RBF kernel) on Dataset 2 (non-linearly separable) ===\n");
-    let svm_rbf2 = MulticlassSVM::train(&x_nonlinear, &y_nonlinear, 3, Kernel::Rbf { gamma: 2.0 });
+    let svm_rbf2 = MulticlassSVM::train(&x_nonlinear, &y_nonlinear, 3, Kernel::Rbf { gamma: 2.0 }, f32::INFINITY);
     let svm_rbf_preds2 = svm_rbf2.predict(&x_nonlinear);
     println!("\nResults:");
     print_predictions(&svm_rbf_preds2, &y_nonlinear);

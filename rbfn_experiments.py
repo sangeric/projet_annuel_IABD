@@ -1,19 +1,3 @@
-"""
-Felidae RBFN — hyperparameter experiments for the report.
-
-Runs a series of controlled experiments on the Radial Basis Function Network:
-  1. Gamma sweep        — bump width, the under/over-fitting knob (slide 103)
-  2. K sweep            — number of centers, the parameter-count knob (slides 106-112)
-  3. Naive vs K-centers — N centers (memorization) vs K centers (generalization)
-  4. Confusion matrix   — per-class performance of the best config
-
-Every plot is saved as a PNG under:
-    report_plots/rbfn_<name>.png
-
-Run from the PA root:
-    python rbfn_experiments.py
-"""
-
 import os
 import numpy as np
 import matplotlib.pyplot as plt

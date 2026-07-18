@@ -5,6 +5,8 @@ use std::os::raw::{c_char, c_int};
 
 use crate::models::mlp::MLP;
 use crate::models::rbfn::RBFN;
+use crate::models::svm::kernel::Kernel;
+use crate::models::svm::multiclass::MulticlassSVM;
 use crate::tensor::Matrix;
 
 // MLP
@@ -253,5 +255,84 @@ pub extern "C" fn rbfn_load(path: *const c_char) -> *mut RBFN {
 pub extern "C" fn rbfn_destroy(model: *mut RBFN) {
     if !model.is_null() {
         unsafe { drop(Box::from_raw(model)) };
+    }
+}
+
+
+// SVM
+#[no_mangle]
+pub extern "C" fn svm_train(
+    x_data: *const f32,
+    x_rows: usize,
+    x_cols: usize,
+    labels: *const u32,
+    n_labels: usize,
+    n_classes: usize,
+    kernel_type: u32,   // 0 = Linear, 1 = Rbf
+    gamma: f32,
+    c: f32,
+) -> *mut MulticlassSVM {
+    let x_vec = unsafe { std::slice::from_raw_parts(x_data, x_rows * x_cols).to_vec() };
+    let x = Matrix::from_vec(x_vec, x_rows, x_cols);
+
+    let labels_vec: Vec<usize> = unsafe {
+        std::slice::from_raw_parts(labels, n_labels)
+            .iter()
+            .map(|&l| l as usize)
+            .collect()
+    };
+
+    let kernel = match kernel_type {
+        1 => Kernel::Rbf { gamma },
+        _ => Kernel::Linear,
+    };
+
+    let model = MulticlassSVM::train(&x, &labels_vec, n_classes, kernel, c);
+    Box::into_raw(Box::new(model))
+}
+
+#[no_mangle]
+pub extern "C" fn svm_predict_classes(
+    model: *const MulticlassSVM,
+    x_data: *const f32,
+    x_rows: usize,
+    x_cols: usize,
+    out_predictions: *mut u32,
+) {
+    let model = unsafe { &*model };
+    let x_vec = unsafe { std::slice::from_raw_parts(x_data, x_rows * x_cols).to_vec() };
+    let x = Matrix::from_vec(x_vec, x_rows, x_cols);
+
+    let preds = model.predict(&x);
+    unsafe {
+        for i in 0..preds.len() {
+            *out_predictions.add(i) = preds[i] as u32;
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn svm_destroy(model: *mut MulticlassSVM) {
+    if !model.is_null() {
+        unsafe { drop(Box::from_raw(model)) };
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn svm_save(model: *const MulticlassSVM, path: *const c_char) -> c_int {
+    let model = unsafe { &*model };
+    let path = unsafe { CStr::from_ptr(path).to_str().unwrap_or("") };
+    match model.save(path) {
+        Ok(_) => 0,
+        Err(_) => -1,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn svm_load(path: *const c_char) -> *mut MulticlassSVM {
+    let path = unsafe { CStr::from_ptr(path).to_str().unwrap_or("") };
+    match MulticlassSVM::load(path) {
+        Ok(model) => Box::into_raw(Box::new(model)),
+        Err(_) => std::ptr::null_mut(),
     }
 }

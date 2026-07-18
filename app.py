@@ -24,6 +24,15 @@ ffi.cdef("""
     int rbfn_save(const void* model, const char* path);
     void* rbfn_load(const char* path);
     void rbfn_destroy(void* model);
+
+    void* svm_train(const float* x_data, size_t x_rows, size_t x_cols,
+                    const uint32_t* labels, size_t n_labels, size_t n_classes,
+                    uint32_t kernel_type, float gamma, float c);
+    void svm_predict_classes(const void* model, const float* x_data, size_t x_rows, size_t x_cols,
+                             uint32_t* out_predictions);
+    int svm_save(const void* model, const char* path);
+    void* svm_load(const char* path);
+    void svm_destroy(void* model);
     
     void* create_rosenblatt_classifier(
         size_t n_features,
@@ -365,6 +374,97 @@ def predict_rbfn(X):
     return scores, None
 
 
+KERNEL_LINEAR = 0
+KERNEL_RBF = 1
+
+
+def train_and_save_svm(kernel_choice, gamma, c, max_samples_per_class, feature_mode, progress=gr.Progress()):
+    use_extract = "Extract" in feature_mode
+    kernel_type = KERNEL_RBF if "RBF" in kernel_choice else KERNEL_LINEAR
+
+    progress(0, desc="Loading dataset...")
+    X, Y = load_dataset(max_samples=int(max_samples_per_class), use_extract=use_extract)
+    if len(X) == 0:
+        return "No dataset found at: " + DATASET_ROOT
+
+    # SVM labels are class indices, not one-hot. Recover them from the one-hot Y.
+    labels = np.argmax(Y, axis=1).astype(np.uint32)
+
+    # hold out 20% as a test set the model never trains on
+    rng = np.random.default_rng(42)
+    idx = rng.permutation(len(X))
+    split = int(0.8 * len(X))
+    train_idx, test_idx = idx[:split], idx[split:]
+    X_train, labels_train = X[train_idx], labels[train_idx]
+    X_test, labels_test = X[test_idx], labels[test_idx]
+
+    progress(0.3, desc=f"Training SVM ({kernel_choice}, gamma={gamma}, C={c})...")
+    X_c = np.ascontiguousarray(X_train, dtype=np.float32)
+    labels_c = np.ascontiguousarray(labels_train, dtype=np.uint32)
+    model = lib.svm_train(
+        ffi.from_buffer("float[]", X_c), X_c.shape[0], X_c.shape[1],
+        ffi.from_buffer("uint32_t[]", labels_c), labels_c.shape[0], 3,
+        kernel_type, float(gamma), float(c)
+    )
+    if model == ffi.NULL:
+        return "Failed to train SVM"
+
+    def acc(Xset, labelset):
+        Xc = np.ascontiguousarray(Xset, dtype=np.float32)
+        out = ffi.new("uint32_t[]", Xc.shape[0])
+        lib.svm_predict_classes(model, ffi.from_buffer("float[]", Xc), Xc.shape[0], Xc.shape[1], out)
+        preds = np.array([out[i] for i in range(Xc.shape[0])])
+        return float(np.mean(preds == labelset) * 100.0)
+
+    train_acc = acc(X_train, labels_train)
+    test_acc = acc(X_test, labels_test)
+
+    save_path = os.path.join(MODEL_DIR, "svm", "svm.bin").encode()
+    ret = lib.svm_save(model, save_path)
+    lib.svm_destroy(model)
+
+    if ret != 0:
+        return "Training done but save failed"
+
+    save_model_meta("svm", {
+        "feature_mode": feature_mode,
+        "kernel": kernel_choice,
+        "gamma": float(gamma),
+        "c": float(c),
+    })
+    progress(1.0, desc="Done")
+    return (
+        f"Training complete.\n"
+        f"Input mode    : {feature_mode}\n"
+        f"Kernel        : {kernel_choice}\n"
+        f"Gamma         : {gamma}\n"
+        f"C             : {c}\n"
+        f"Samples       : {len(X_train)} train / {len(X_test)} test\n"
+        f"Train accuracy: {train_acc:.1f}%\n"
+        f"Test accuracy : {test_acc:.1f}%\n"
+        f"Saved to      : {save_path.decode()}"
+    )
+
+
+def predict_svm(X):
+    model_path = os.path.join(MODEL_DIR, "svm", "svm.bin")
+    if not os.path.exists(model_path):
+        return None, "No trained SVM found — train it first in the Train tab"
+
+    model = lib.svm_load(model_path.encode())
+    if model == ffi.NULL:
+        return None, "Failed to load SVM"
+
+    out_cls = ffi.new("uint32_t[]", 1)
+    lib.svm_predict_classes(model, ffi.from_buffer("float[]", X), 1, X.shape[1], out_cls)
+    lib.svm_destroy(model)
+
+    predicted = int(out_cls[0])
+    # SVM exposes only the class index, so we show a hard 1.0 on the winner.
+    scores = {name: (1.0 if i == predicted else 0.0) for i, name in enumerate(CLASS_NAMES)}
+    return scores, None
+
+
 def train_and_save_rosenblatt(epochs, learning_rate, max_samples_per_class, feature_mode, seed, progress=gr.Progress()):
     use_extract = "Extract" in feature_mode
     n_features = N_FEATURES if use_extract else N_FLATTEN
@@ -492,6 +592,11 @@ def predict(pil_image, model_choice):
         use_extract = "Extract" in meta["feature_mode"]
         X = preprocess(pil_image, use_extract=use_extract)
         return predict_rosenblatt(X)
+    elif model_choice == "SVM":
+        meta = load_model_meta("svm")
+        use_extract = "Extract" in meta["feature_mode"]
+        X = preprocess(pil_image, use_extract=use_extract)
+        return predict_svm(X)
     else:
         return None, f"{model_choice} not yet implemented"
 
@@ -526,7 +631,13 @@ def check_model_status():
         lines.append(f"✅ Linear (Rosenblatt) — ready ({mode})")
     else:
         lines.append("❌ Linear (Rosenblatt) — not trained")
-    lines.append("❌ SVM — not yet implemented")
+
+    svm_path = os.path.join(MODEL_DIR, "svm", "svm.bin")
+    if os.path.exists(svm_path):
+        meta = load_model_meta("svm")
+        lines.append(f"✅ SVM — ready ({meta['feature_mode']}, {meta.get('kernel', '?')}, gamma={meta.get('gamma', '?')}, C={meta.get('c', '?')})")
+    else:
+        lines.append("❌ SVM — not trained")
     return "\n".join(lines)
 
 
@@ -582,7 +693,7 @@ with gr.Blocks(title="Felidae Classifier") as demo:
 
                         with gr.Column():
                             epochs_slider = gr.Slider(minimum=10, maximum=10000, value=100, step=10, label="Epochs")
-                            lr_slider = gr.Slider(minimum=0.0001, maximum=0.5, value=0.01, step=0.0001, label="Learning rate")
+                            lr_slider = gr.Slider(minimum=0.001, maximum=0.5, value=0.01, step=0.001, label="Learning rate")
                             sample_size_slider = gr.Slider(minimum=100, maximum=5000, value=3000, step=100, label="Max samples per class")
 
                     train_btn = gr.Button("Train MLP", variant="primary")
@@ -663,7 +774,7 @@ with gr.Blocks(title="Felidae Classifier") as demo:
 
                         with gr.Column():
                             lin_epochs = gr.Slider(minimum=10, maximum=10000, value=500, step=10, label="Epochs")
-                            lin_lr = gr.Slider(minimum=0.0001, maximum=0.5, value=0.01, step=0.0001, label="Learning rate")
+                            lin_lr = gr.Slider(minimum=0.001, maximum=0.5, value=0.01, step=0.001, label="Learning rate")
                             lin_samples = gr.Slider(minimum=100, maximum=5000, value=3000, step=100, label="Max samples per class")
 
                     lin_train_btn = gr.Button("Train Rosenblatt", variant="primary")
@@ -673,6 +784,37 @@ with gr.Blocks(title="Felidae Classifier") as demo:
                         fn=train_and_save_rosenblatt,
                         inputs=[lin_epochs, lin_lr, lin_samples, lin_feature_mode, lin_seed],
                         outputs=lin_train_output
+                    )
+
+                with gr.Tab("SVM"):
+                    gr.Markdown("### Train and save an SVM")
+                    gr.Markdown("One-vs-rest support vector machine. The dense QP solve is costly, so keep the sample count modest.")
+
+                    with gr.Row():
+                        with gr.Column():
+                            svm_feature_mode = gr.Radio(
+                                choices=["Extract (20 features)", "Flatten (3072 pixels)"],
+                                value="Extract (20 features)",
+                                label="Input mode"
+                            )
+                            svm_kernel = gr.Radio(
+                                choices=["RBF", "Linear"],
+                                value="RBF",
+                                label="Kernel"
+                            )
+                            svm_gamma_slider = gr.Slider(minimum=0.001, maximum=10.0, value=0.01, step=0.001, label="Gamma (RBF only)")
+
+                        with gr.Column():
+                            svm_c_slider = gr.Slider(minimum=0.1, maximum=100.0, value=10.0, step=0.1, label="C (soft-margin penalty)")
+                            svm_sample_slider = gr.Slider(minimum=50, maximum=1000, value=200, step=50, label="Max samples per class")
+
+                    svm_train_btn = gr.Button("Train SVM", variant="primary")
+                    svm_train_output = gr.Textbox(label="Training log", interactive=False, lines=8)
+
+                    svm_train_btn.click(
+                        fn=train_and_save_svm,
+                        inputs=[svm_kernel, svm_gamma_slider, svm_c_slider, svm_sample_slider, svm_feature_mode],
+                        outputs=svm_train_output
                     )
 
         with gr.Tab("📊 Status"):
