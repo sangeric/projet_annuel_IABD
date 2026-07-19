@@ -10,6 +10,7 @@ use felidae_classifier::models::svm::multiclass::MulticlassSVM;
 // use felidae_classifier::models::perceptron::RosenblattClassifier;
 use felidae_classifier::data::load_or_build;
 use felidae_classifier::data::one_hot_encode;
+use felidae_classifier::models::perceptron::RosenblattClassifier;
 use felidae_classifier::training::metrics::{confusion_matrix, print_confusion_matrix};
 
 fn main() {
@@ -63,7 +64,7 @@ fn main() {
     // ---------------------------------------------------------------
     // Rosenblatt (one-vs-rest)
     // ---------------------------------------------------------------
-/*    println!("\n=== Rosenblatt (one-vs-rest) ===\n");
+    println!("\n=== Rosenblatt (one-vs-rest) ===\n");
 
     let rosen_epochs = 100;
     let rosen_lr = 0.01;
@@ -96,6 +97,7 @@ fn main() {
     let (mut _classifier_rosen_loaded, _seeds) =
         RosenblattClassifier::load("saved_models/rosenblatt.bin")
             .expect("Erreur lors du chargement du modèle");
+
     // println!("Seeds chargées : {:?}", seeds);
     // classifier_rosen_loaded.get_all_params();
     // classifier_rosen_loaded.get_all_weight();
@@ -103,6 +105,7 @@ fn main() {
     // ---------------------------------------------------------------
     // MLP
     // ---------------------------------------------------------------
+    /*
     println!("\n=== MLP ===\n");
 
     let architecture = &[n_features, 32, 16, n_classes];
@@ -127,10 +130,11 @@ fn main() {
     let matrix = confusion_matrix(&predictions, &test_ds.labels, n_classes);
     println!("\n=== Confusion Matrix on Test Set (MLP) ===\n");
     print_confusion_matrix(&matrix, &dataset.class_names);
-*/
+
     // ---------------------------------------------------------------
     // RBFN
     // ---------------------------------------------------------------
+
     println!("\n=== RBFN ===\n");
 
     let k = 150;
@@ -167,6 +171,7 @@ fn main() {
     // set, so the reported test accuracy stays comparable to the other
     // models.
     // ---------------------------------------------------------------
+
     println!("\n=== SVM ===\n");
 
     let svm_cache_path = format!("cache/dataset_{}_200.bin", mode);
@@ -221,5 +226,7 @@ fn main() {
     match svm.save("saved_models/svm.bin") {
         Ok(_) => println!("\nSaved SVM model to saved_models/svm.bin"),
         Err(e) => eprintln!("\nFailed to save SVM: {}", e),
-    }
+
+     */
+
 }

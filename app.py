@@ -166,12 +166,11 @@ def load_dataset(max_samples=3000, use_extract=True):
     return X, Y_onehot
 
 
-# --- Dataset loading for linear ---
 def load_dataset_linear(max_samples=3000, use_extract=True):
     class_folders = {"cat": 0, "lion": 1, "cheetah": 2}
     X, Y = [], []
     for folder, label in class_folders.items():
-        folder_path = os.path.join(DATASET_ROOT_NOTCLEANED, folder)
+        folder_path = os.path.join(DATASET_ROOT, folder)
         if not os.path.exists(folder_path):
             continue
         files = [f for f in os.listdir(folder_path) if f.lower().endswith((".jpg", ".png"))]
@@ -209,7 +208,6 @@ def train_and_save_mlp(epochs, learning_rate, max_samples_per_class, hidden_laye
     if len(X) == 0:
         return "No dataset found at: " + DATASET_ROOT
 
-    # hold out 20% as a test set the model never trains on
     rng = np.random.default_rng(42)
     idx = rng.permutation(len(X))
     split = int(0.8 * len(X))
@@ -304,7 +302,6 @@ def train_and_save_rbfn(k, gamma, kmeans_iters, max_samples_per_class, feature_m
     if len(X) == 0:
         return "No dataset found at: " + DATASET_ROOT
 
-    # hold out 20% as a test set the model never trains on
     rng = np.random.default_rng(42)
     idx = rng.permutation(len(X))
     split = int(0.8 * len(X))
@@ -474,7 +471,6 @@ def train_and_save_rosenblatt(epochs, learning_rate, max_samples_per_class, feat
     if len(X) == 0:
         return "No dataset found at: " + DATASET_ROOT
 
-    # hold out 20% as a test set
     rng = np.random.default_rng(42)
     idx = rng.permutation(len(X))
     split = int(0.8 * len(X))
@@ -485,7 +481,7 @@ def train_and_save_rosenblatt(epochs, learning_rate, max_samples_per_class, feat
     progress(0.1, desc="Creating classifier...")
     classifier = lib.create_rosenblatt_classifier(
         n_features, float(learning_rate),
-        0.0, 0.0, 0.0,
+        1.0, 1.0, 1.0,
         int(seed)
     )
     if classifier == ffi.NULL:
@@ -621,16 +617,16 @@ def check_model_status():
     rbfn_path = os.path.join(MODEL_DIR, "rbfn", "rbfn.bin")
     if os.path.exists(rbfn_path):
         meta = load_model_meta("rbfn")
-        lines.append(f"✅ RBFN — ready ({meta['feature_mode']}, K={meta.get('k', '?')}, gamma={meta.get('gamma', '?')})")
+        lines.append(f"✅ RBFN - ready ({meta['feature_mode']}, K={meta.get('k', '?')}, gamma={meta.get('gamma', '?')})")
     else:
         lines.append("❌ RBFN — not trained")
 
     linear_path = os.path.join(MODEL_DIR, "linear", "rosenblatt.bin")
     if os.path.exists(linear_path):
         mode = load_model_meta("linear")["feature_mode"]
-        lines.append(f"✅ Linear (Rosenblatt) — ready ({mode})")
+        lines.append(f"✅ Linear (Rosenblatt) - ready ({mode})")
     else:
-        lines.append("❌ Linear (Rosenblatt) — not trained")
+        lines.append("❌ Linear (Rosenblatt) - not trained")
 
     svm_path = os.path.join(MODEL_DIR, "svm", "svm.bin")
     if os.path.exists(svm_path):

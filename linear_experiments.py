@@ -24,7 +24,7 @@ ffi.cdef("""
         float bias_cat, float bias_lion, float bias_cheetah,
         uint64_t seed
     );
-    void train_classifier(
+    void train_classifier_rosen(
         void* classifier,
         const float* x, size_t rows, size_t cols,
         const size_t* y, size_t y_len,
@@ -46,7 +46,7 @@ else:
 
 FEATURE_MODE = "extract"     # "extract" ou "flatten"
 IMG_SIZE = (32, 32)
-DATASET_ROOT = os.path.join(BASE, "dataset")
+DATASET_ROOT = os.path.join(BASE, "dataset_clean")
 CLASS_NAMES = ["Cat", "Lion", "Cheetah"]
 N_FEATURES = 20 if FEATURE_MODE == "extract" else 3072
 
@@ -93,11 +93,11 @@ def split_train_test(X, Y, test_ratio=0.2):
 
 def train_rosenblatt(X_train, Y_train, lr, epochs, seed=42):
     clf = lib.create_rosenblatt_classifier(
-        X_train.shape[1], float(lr), 0.0, 0.0, 0.0, int(seed)
+        X_train.shape[1], float(lr), 1.0, 1.0, 1.0, int(seed)
     )
     X_c = np.ascontiguousarray(X_train, dtype=np.float32)
     Y_c = np.ascontiguousarray(Y_train, dtype=np.uint64)
-    lib.train_classifier(
+    lib.train_classifier_rosen(
         clf,
         ffi.from_buffer("float[]", X_c), X_c.shape[0], X_c.shape[1],
         ffi.from_buffer("size_t[]", Y_c), len(Y_c),

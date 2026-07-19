@@ -40,12 +40,12 @@ impl RosenblattClassifier{
         epochs: usize,
     ) -> ((Vec<f32>, Vec<f32>), (Vec<f32>, Vec<f32>), (Vec<f32>, Vec<f32>)) {
         let y_cat = Rosenblatt::to_binary_labels(y, 0);
-        let y_cheetah = Rosenblatt::to_binary_labels(y, 1);
-        let y_lion = Rosenblatt::to_binary_labels(y, 2);
+        let y_lion = Rosenblatt::to_binary_labels(y, 1);
+        let y_cheetah = Rosenblatt::to_binary_labels(y, 2);
 
         let y_cat_test = Rosenblatt::to_binary_labels(y_test, 0);
-        let y_cheetah_test = Rosenblatt::to_binary_labels(y_test, 1);
-        let y_lion_test = Rosenblatt::to_binary_labels(y_test, 2);
+        let y_lion_test = Rosenblatt::to_binary_labels(y_test, 1);
+        let y_cheetah_test = Rosenblatt::to_binary_labels(y_test, 2);
 
         let cat_hist = self.cat.train_with_eval(x, &y_cat, x_test, &y_cat_test, epochs);
         let lion_hist = self.lion.train_with_eval(x, &y_lion, x_test, &y_lion_test, epochs);
@@ -60,8 +60,9 @@ impl RosenblattClassifier{
         let cheetah_predict = self.cheetah.predict(&x);
 
         let tab_argmax:Vec<usize> = Rosenblatt::argmax(&cat_predict, &lion_predict, &cheetah_predict);
-        Rosenblatt::print_prediction_result(&tab_argmax, y);
-        println!("test {:?}", tab_argmax);
+        if y.len() == tab_argmax.len() {
+            Rosenblatt::print_prediction_result(&tab_argmax, y);
+        }
         tab_argmax
     }
 
@@ -252,7 +253,7 @@ pub extern "C" fn release_rosenblatt_classifier(classifier: *mut RosenblattClass
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn train_classifier(
+pub extern "C" fn train_classifier_rosen(
     classifier: *mut RosenblattClassifier,
     x: *const f32,
     rows: usize,
