@@ -217,7 +217,7 @@ impl Rosenblatt {
     }
 
     pub fn print_prediction_result(prediction : &Vec<usize>, label : &Vec<usize>){
-        let class_names = ["cat", "cheetah", "lion"];
+        let class_names = ["cat", "lion", "cheetah"];
         for i in 0..prediction.len(){
             let status = if prediction[i] == label[i] {"OK"} else {"KO"};
             println!(
