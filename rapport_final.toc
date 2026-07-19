@@ -1,0 +1,66 @@
+\babel@toc {french}{}\relax 
+\contentsline {chapter}{\numberline {1}Introduction et objectifs du projet}{3}{chapter.1}%
+\contentsline {chapter}{\numberline {2}Constitution et nettoyage du jeu de données}{4}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Collecte}{4}{section.2.1}%
+\contentsline {section}{\numberline {2.2}Nettoyage par détection d'objets}{4}{section.2.2}%
+\contentsline {section}{\numberline {2.3}Chargement et mise en cache}{5}{section.2.3}%
+\contentsline {chapter}{\numberline {3}Architecture logicielle de la bibliothèque}{6}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Une bibliothèque Rust from scratch}{6}{section.3.1}%
+\contentsline {section}{\numberline {3.2}Qualité et tests}{6}{section.3.2}%
+\contentsline {section}{\numberline {3.3}Interopérabilité et applications}{7}{section.3.3}%
+\contentsline {chapter}{\numberline {4}Représentations d'entrée et contrainte de dimensionnement}{8}{chapter.4}%
+\contentsline {chapter}{\numberline {5}Étude expérimentale du Perceptron de Rosenblatt}{9}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Cadre méthodologique}{9}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Expérience 1 --- Influence du taux d'apprentissage}{10}{section.5.2}%
+\contentsline {section}{\numberline {5.3}Expérience 2 --- Influence du nombre d'époques}{10}{section.5.3}%
+\contentsline {section}{\numberline {5.4}Expérience 3 --- Stabilité selon la graine aléatoire}{11}{section.5.4}%
+\contentsline {section}{\numberline {5.5}Expérience 4 --- Matrice de confusion}{12}{section.5.5}%
+\contentsline {section}{\numberline {5.6}Synthèse}{13}{section.5.6}%
+\contentsline {chapter}{\numberline {6}Étude expérimentale du Perceptron Multi-Couches}{15}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Démarche de construction et premiers enseignements}{15}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Expériences systématiques}{16}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Cadre méthodologique}{16}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Expérience 1 --- Influence du taux d'apprentissage}{16}{section.6.4}%
+\contentsline {section}{\numberline {6.5}Expérience 2 --- Influence du nombre d'époques}{17}{section.6.5}%
+\contentsline {section}{\numberline {6.6}Expérience 3 --- Influence de la profondeur du réseau}{17}{section.6.6}%
+\contentsline {section}{\numberline {6.7}Expérience 4 --- Influence de la taille du jeu de données}{18}{section.6.7}%
+\contentsline {section}{\numberline {6.8}Expérience 5 --- Mise en évidence du sur-apprentissage}{19}{section.6.8}%
+\contentsline {section}{\numberline {6.9}Expérience 6 --- Mise en évidence du sous-apprentissage}{19}{section.6.9}%
+\contentsline {section}{\numberline {6.10}Expérience 7 --- Recherche du compromis par architecture}{20}{section.6.10}%
+\contentsline {section}{\numberline {6.11}Expérience 8 --- Matrice de confusion du meilleur modèle}{21}{section.6.11}%
+\contentsline {section}{\numberline {6.12}Comparaison des représentations d'entrée : caractéristiques extraites contre pixels bruts}{22}{section.6.12}%
+\contentsline {section}{\numberline {6.13}Synthèse}{23}{section.6.13}%
+\contentsline {chapter}{\numberline {7}Étude expérimentale du Radial Basis Function Network}{24}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Cadre méthodologique}{24}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Expérience 1 --- Influence de gamma}{25}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Expérience 2 --- Influence du nombre de centres}{26}{section.7.3}%
+\contentsline {section}{\numberline {7.4}Expérience 3 --- Version naïve contre K centres}{26}{section.7.4}%
+\contentsline {section}{\numberline {7.5}Expérience 4 --- Matrice de confusion}{27}{section.7.5}%
+\contentsline {section}{\numberline {7.6}Synthèse}{27}{section.7.6}%
+\contentsline {chapter}{\numberline {8}Étude expérimentale du Support Vector Machine}{29}{chapter.8}%
+\contentsline {section}{\numberline {8.1}Cadre méthodologique}{29}{section.8.1}%
+\contentsline {section}{\numberline {8.2}Expérience 1 --- Influence de gamma}{30}{section.8.2}%
+\contentsline {section}{\numberline {8.3}Expérience 2 --- Influence de C}{30}{section.8.3}%
+\contentsline {section}{\numberline {8.4}Expérience 3 --- Interaction gamma et C}{31}{section.8.4}%
+\contentsline {section}{\numberline {8.5}Expérience 4 --- Noyau linéaire contre noyau RBF}{31}{section.8.5}%
+\contentsline {section}{\numberline {8.6}Expérience 5 --- Matrice de confusion}{32}{section.8.6}%
+\contentsline {section}{\numberline {8.7}Synthèse}{34}{section.8.7}%
+\contentsline {chapter}{\numberline {9}Comparaison transversale des modèles}{35}{chapter.9}%
+\contentsline {section}{\numberline {9.1}Performances finales}{35}{section.9.1}%
+\contentsline {section}{\numberline {9.2}Le profil des erreurs comme signature du couple modèle-représentation}{36}{section.9.2}%
+\contentsline {section}{\numberline {9.3}Coût et nature de l'entraînement}{36}{section.9.3}%
+\contentsline {chapter}{\numberline {10}Difficultés rencontrées et résolutions}{37}{chapter.10}%
+\contentsline {section}{\numberline {10.1}Le réseau qui refusait d'apprendre}{37}{section.10.1}%
+\contentsline {section}{\numberline {10.2}L'ordre des opérations dans la rétropropagation}{37}{section.10.2}%
+\contentsline {section}{\numberline {10.3}Le module fantôme}{38}{section.10.3}%
+\contentsline {section}{\numberline {10.4}Le bug d'accumulation détecté par les tests}{38}{section.10.4}%
+\contentsline {section}{\numberline {10.5}Les matrices singulières en haute dimension}{38}{section.10.5}%
+\contentsline {section}{\numberline {10.6}La compilation d'OSQP}{38}{section.10.6}%
+\contentsline {section}{\numberline {10.7}L'infaisabilité de la marge dure}{39}{section.10.7}%
+\contentsline {section}{\numberline {10.8}L'effondrement par mémorisation du SVM}{39}{section.10.8}%
+\contentsline {section}{\numberline {10.9}La matrice de confusion du mauvais réglage}{39}{section.10.9}%
+\contentsline {section}{\numberline {10.10}Les pertes de code lors des fusions}{39}{section.10.10}%
+\contentsline {section}{\numberline {10.11}Le carnet de tests évaporé et sa récupération}{40}{section.10.11}%
+\contentsline {section}{\numberline {10.12}Les tests du découpage stratifié}{40}{section.10.12}%
+\contentsline {chapter}{\numberline {11}Interface et livrables}{41}{chapter.11}%
+\contentsline {chapter}{\numberline {12}Conclusion et perspectives}{42}{chapter.12}%
