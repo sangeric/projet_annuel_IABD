@@ -22,11 +22,11 @@ BASE = os.path.abspath("felidae_classifier")
 lib = ffi.dlopen(os.path.join(BASE, "target/release/libfelidae_classifier.so"))
 
 
-FEATURE_MODE = "flatten"     # "extract" or "flatten"
-FLATTEN_DIM = 32             # flatten mode resizes images to FLATTEN_DIM x FLATTEN_DIM
-FLATTEN_GRAYSCALE = False    # grayscale keeps the feature count under the 10% rule
+FEATURE_MODE = "flatten"
+FLATTEN_DIM = 32
+FLATTEN_GRAYSCALE = False
 
-IMG_SIZE = (32, 32)          # extract mode always uses 32x32 RGB (what extract expects)
+IMG_SIZE = (32, 32)
 DATASET_ROOT = os.path.join(BASE, "dataset_clean")
 CLASS_NAMES = ["Cat", "Lion", "Cheetah"]
 
@@ -47,14 +47,14 @@ np.random.seed(42)
 
 
 def features_from_image(path):
-    """Turn one image file into a feature vector according to FEATURE_MODE."""
+
     if FEATURE_MODE == "extract":
         img = Image.open(path).convert("RGB").resize(IMG_SIZE)
         arr = np.ascontiguousarray(np.array(img, dtype=np.float32).flatten() / 255.0, dtype=np.float32)
         out = ffi.new("float[]", N_FEATURES)
         lib.extract_features(ffi.from_buffer("float[]", arr), out, N_FEATURES)
         return np.array([out[i] for i in range(N_FEATURES)], dtype=np.float32)
-    else:  # flatten: raw pixels straight in, no extract_features call
+    else:
         mode = "L" if FLATTEN_GRAYSCALE else "RGB"
         img = Image.open(path).convert(mode).resize((FLATTEN_DIM, FLATTEN_DIM))
         return np.array(img, dtype=np.float32).flatten() / 255.0
@@ -186,19 +186,19 @@ def experiment_k_sweep(data):
 
 def experiment_naive_vs_kcenters():
     print("\n=== RBFN Experiment 3 — Naive vs K-centers ===")
-    # Naive inverts an N x N matrix, so keep the sample small.
+
     X, Y, labels = load_felidae(max_per_class=100)
     (X_train, Y_train, _), (X_test, Y_test, _) = split_train_test(X, Y, labels)
     gamma = 0.1
 
-    # Naive: every training example is a center
+
     naive = train_naive(X_train, Y_train, gamma)
     naive_train, _ = accuracy_of(naive, X_train, Y_train)
     naive_test, _ = accuracy_of(naive, X_test, Y_test)
     lib.rbfn_destroy(naive)
     print(f"  Naive (N={len(X_train)} centers): train={naive_train:.1f}% test={naive_test:.1f}%")
 
-    # K-centers with a modest K
+
     k = 30
     kc = train_kcenters(X_train, Y_train, k, gamma)
     kc_train, _ = accuracy_of(kc, X_train, Y_train)
@@ -208,7 +208,7 @@ def experiment_naive_vs_kcenters():
 
     labels_bar = [f"Naive\n(N={len(X_train)})", f"K-centers\n(K={k})"]
     train_vals = [naive_train, kc_train]
-    test_vals = [kc_train and naive_test, kc_test]  # keep order clear below
+    test_vals = [kc_train and naive_test, kc_test]
     test_vals = [naive_test, kc_test]
 
     x = np.arange(2)
@@ -271,7 +271,7 @@ def main():
 
     experiment_gamma_sweep(data)
     experiment_k_sweep(data)
-    experiment_naive_vs_kcenters()   # loads its own small dataset
+    experiment_naive_vs_kcenters()
     experiment_confusion(data)
 
     print("\n" + "=" * 60)

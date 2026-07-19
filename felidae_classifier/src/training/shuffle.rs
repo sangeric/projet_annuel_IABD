@@ -16,7 +16,7 @@ pub fn shuffled_indices(n: usize, seed: u64) -> Vec<usize> {
     indices
 }
 
-// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -29,7 +29,7 @@ mod tests {
 
     #[test]
     fn test_contains_all_indices() {
-        // After shuffling, every index from 0..n must appear exactly once
+
         let order = shuffled_indices(50, 42);
         let mut seen = vec![false; 50];
         for &i in &order {
@@ -44,7 +44,7 @@ mod tests {
 
     #[test]
     fn test_same_seed_same_order() {
-        // Reproducible: the same seed must produce the same shuffle
+
         let a = shuffled_indices(100, 42);
         let b = shuffled_indices(100, 42);
         assert_eq!(a, b);
@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn test_different_seeds_differ() {
-        // Different seeds should usually produce different orders
+
         let a = shuffled_indices(100, 42);
         let b = shuffled_indices(100, 7);
         assert_ne!(a, b);
@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn test_empty_and_single() {
-        // Edge cases: 0 and 1 elements should not crash
+
         let empty = shuffled_indices(0, 42);
         assert_eq!(empty.len(), 0);
 

@@ -45,11 +45,11 @@ mod tests {
 
     #[test]
     fn test_linear_kernel_matches_dot_product() {
-        // K(x,x) for linear kernel should equal ||x||^2
+
         let x = Matrix::from_vec(vec![3.0, 4.0], 1, 2);
         let k = Kernel::Linear;
         let val = k.compute(&x, 0, 0);
-        assert!((val - 25.0).abs() < 1e-6); // 3^2 + 4^2
+        assert!((val - 25.0).abs() < 1e-6);
     }
 
     #[test]

@@ -35,7 +35,6 @@ impl Dataset {
         let n_features = self.x.cols as u32;
         let n_classes = self.class_names.len() as u32;
 
-        // Header
         if let Err(e) = file.write_all(&n_samples.to_le_bytes()) {
             return Err(format!("write failed: {}", e));
         }
@@ -46,7 +45,6 @@ impl Dataset {
             return Err(format!("write failed: {}", e));
         }
 
-        // Class names — each preceded by its byte length
         for name in &self.class_names {
             let bytes = name.as_bytes();
             let len = bytes.len() as u32;
@@ -58,7 +56,6 @@ impl Dataset {
             }
         }
 
-        // Labels
         for &label in &self.labels {
             let l = label as u32;
             if let Err(e) = file.write_all(&l.to_le_bytes()) {
@@ -66,7 +63,6 @@ impl Dataset {
             }
         }
 
-        // Feature matrix — written as a single big block of bytes
         for &value in &self.x.data {
             if let Err(e) = file.write_all(&value.to_le_bytes()) {
                 return Err(format!("write failed: {}", e));
@@ -82,7 +78,6 @@ impl Dataset {
             Err(e) => return Err(format!("Failed to open {}: {}", path, e)),
         };
 
-        // Small helpers to read fixed-size primitives
         let read_u32 = |file: &mut File| -> Result<u32, String> {
             let mut buf = [0u8; 4];
             if let Err(e) = file.read_exact(&mut buf) {
@@ -98,12 +93,10 @@ impl Dataset {
             Ok(f32::from_le_bytes(buf))
         };
 
-        // Header
         let n_samples = read_u32(&mut file)? as usize;
         let n_features = read_u32(&mut file)? as usize;
         let n_classes = read_u32(&mut file)? as usize;
 
-        // Class names
         let mut class_names = Vec::new();
         for _ in 0..n_classes {
             let len = read_u32(&mut file)? as usize;
@@ -117,13 +110,11 @@ impl Dataset {
             }
         }
 
-        // Labels
         let mut labels = Vec::with_capacity(n_samples);
         for _ in 0..n_samples {
             labels.push(read_u32(&mut file)? as usize);
         }
 
-        // Feature data
         let mut x_data = Vec::with_capacity(n_samples * n_features);
         for _ in 0..(n_samples * n_features) {
             x_data.push(read_f32(&mut file)?);
@@ -136,10 +127,7 @@ impl Dataset {
         })
     }
 
-    // Splits this dataset into a training and test set, stratified by class.
-    // Each class contributes the same proportion (test_ratio) to the test set,
-    // so class balance is preserved in both splits.
-    // Same RNG seed -> same split, for reproducible reports.
+
     pub fn train_test_split(&self, test_ratio: f32, seed: u64) -> (Dataset, Dataset) {
         let n = self.len();
         let n_features = self.x.cols;
@@ -160,9 +148,6 @@ impl Dataset {
 
         for (class, class_indices) in indices_by_class.iter().enumerate() {
             let m = class_indices.len();
-            // Use a seed derived in a way that avoids collisions between
-            // adjacent global seeds and different classes (a large odd
-            // multiplier avoids simple "seed+class" aliasing).
             let class_seed = seed
                 .wrapping_mul(1_000_003)
                 .wrapping_add(class as u64 * 7919);
@@ -211,7 +196,6 @@ pub fn load_or_build(
     samples_per_class: Option<usize>,
     feature_extractor: fn(&LoadedImage) -> Vec<f32>,
 ) -> Result<Dataset, String> {
-    // Try the cache first
     match Dataset::load(cache_path) {
         Ok(ds) => {
             println!("Loaded dataset from cache: {}", cache_path);
@@ -222,12 +206,9 @@ pub fn load_or_build(
         }
     }
 
-    // Cache miss — build from scratch
     let dataset = load_dataset(root, samples_per_class, feature_extractor)?;
 
-    // Try to write the cache. If it fails (e.g. directory doesn't exist),
-    // log a warning but still return the dataset — caching is an optimization,
-    // not a requirement.
+
     match dataset.save(cache_path) {
         Ok(_) => println!("Saved dataset to cache: {}", cache_path),
         Err(e) => eprintln!("Warning: failed to save cache: {}", e),
@@ -236,29 +217,12 @@ pub fn load_or_build(
     Ok(dataset)
 }
 
-/// Loads an image-classification dataset from a folder structure.
-///
-/// Every direct subdirectory of `root` is treated as a class.
-/// The subfolder's name becomes the class label.
-/// Classes are sorted alphabetically so label indices are reproducible.
-///
-/// Example structure:
-///   root/
-///     class_a/ *.jpg
-///     class_b/ *.jpg
-///
-/// `samples_per_class` caps how many images to load per class (None = all).
-/// `feature_extractor` converts a LoadedImage into a feature vector —
-///                       the library doesn't care what features you choose.
-///
-/// Returns a Dataset whose `class_names` reflects the folders found.
-/// Files that fail to load are skipped with a warning.
+
 pub fn load_dataset(
     root: &str,
     samples_per_class: Option<usize>,
     feature_extractor: fn(&LoadedImage) -> Vec<f32>,
 ) -> Result<Dataset, String> {
-    // ---- Step 1: discover class folders ----
     let entries = match fs::read_dir(root) {
         Ok(entries) => entries,
         Err(e) => return Err(format!("Failed to read root directory {}: {}", root, e)),
@@ -291,7 +255,6 @@ pub fn load_dataset(
 
     println!("Discovered {} classes: {:?}", class_names.len(), class_names);
 
-    // ---- Step 2: load every image and apply the feature extractor ----
     let mut x_data = Vec::new();
     let mut labels = Vec::new();
 
@@ -335,7 +298,6 @@ pub fn load_dataset(
                 Ok(img) => {
                     let features = feature_extractor(&img);
 
-                    // Lock in feature length on first image, then enforce consistency
                     match n_features {
                         None => n_features = Some(features.len()),
                         Some(expected) => {
@@ -426,10 +388,7 @@ mod tests {
 
     #[test]
     fn test_split_sizes() {
-        // With stratified splitting the total test size is the sum of
-        // several independent per-class roundings, so it can differ from
-        // a single global rounding by a couple of examples. We check it's
-        // close, and that every example ends up in exactly one split.
+
         let dataset = make_dummy_dataset(100, 3, 3);
         let (train, test) = dataset.train_test_split(0.2, 42);
 
@@ -458,9 +417,7 @@ mod tests {
 
     #[test]
     fn test_split_is_stratified() {
-        // Every class present in the full dataset should also be present
-        // in both the train and test splits — that's the whole point of
-        // stratifying rather than shuffling the pooled dataset.
+
         let dataset = make_dummy_dataset(90, 3, 3);
         let (train, test) = dataset.train_test_split(0.2, 42);
 
@@ -505,17 +462,14 @@ mod tests {
         assert_eq!(y.rows, 3);
         assert_eq!(y.cols, 3);
 
-        // Row 0 — label 0 → [+1, -1, -1]
         assert_eq!(y.get(0, 0),  1.0);
         assert_eq!(y.get(0, 1), -1.0);
         assert_eq!(y.get(0, 2), -1.0);
 
-        // Row 1 — label 2 → [-1, -1, +1]
         assert_eq!(y.get(1, 0), -1.0);
         assert_eq!(y.get(1, 1), -1.0);
         assert_eq!(y.get(1, 2),  1.0);
 
-        // Row 2 — label 1 → [-1, +1, -1]
         assert_eq!(y.get(2, 0), -1.0);
         assert_eq!(y.get(2, 1),  1.0);
         assert_eq!(y.get(2, 2), -1.0);

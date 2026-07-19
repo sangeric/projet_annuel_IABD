@@ -1,9 +1,6 @@
 // src/tensor/mod.rs
 
-/// A row-major matrix of f32 values.
-///
-/// Memory layout: element at row i, col j is at index i * cols + j
-/// This is the same as C's 2D arrays — unlike numpy which can be either.
+
 #[derive(Debug, Clone)]
 pub struct Matrix {
     pub data: Vec<f32>,
@@ -12,7 +9,6 @@ pub struct Matrix {
 }
 
 impl Matrix {
-    /// Creates a matrix filled with zeros — like numpy.zeros((rows, cols))
     pub fn zeros(rows: usize, cols: usize) -> Self {
         let mut data = Vec::new();
         for _ in 0..rows * cols {
@@ -21,8 +17,7 @@ impl Matrix {
         Self { data, rows, cols }
     }
 
-    /// Creates a matrix from an existing flat Vec — you must provide the right shape.
-    /// Like numpy.array([...]).reshape(rows, cols)
+
     pub fn from_vec(data: Vec<f32>, rows: usize, cols: usize) -> Self {
         assert_eq!(
             data.len(),
@@ -35,19 +30,18 @@ impl Matrix {
         Self { data, rows, cols }
     }
 
-    /// Read element at (row, col) — immutable borrow, like matrix[i][j] in C
+
     pub fn get(&self, row: usize, col: usize) -> f32 {
         self.data[row * self.cols + col]
     }
 
-    /// Write element at (row, col) — requires mutable borrow
+
     pub fn set(&mut self, row: usize, col: usize, val: f32) {
         self.data[row * self.cols + col] = val;
     }
 
 
-    /// Matrix multiplication (dot product) — self is (M x K), rhs is (K x N), result is (M x N)
-    /// Like numpy.dot(a, b) or a @ b
+
     pub fn dot(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(
             self.cols,
@@ -74,8 +68,7 @@ impl Matrix {
         result
     }
 
-    /// Transpose — like numpy.T
-    /// Turns (M x N) into (N x M)
+
     pub fn transpose(&self) -> Matrix {
         let mut result = Matrix::zeros(self.cols, self.rows);
 
@@ -88,8 +81,7 @@ impl Matrix {
         result
     }
 
-    /// Elementwise addition — both matrices must have the same shape
-    /// Like numpy: a + b
+
     pub fn add(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.rows, rhs.rows);
         assert_eq!(self.cols, rhs.cols);
@@ -103,7 +95,7 @@ impl Matrix {
         Matrix::from_vec(result_data, self.rows, self.cols)
     }
 
-    /// Elementwise subtraction — like numpy: a - b
+
     pub fn sub(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.rows, rhs.rows);
         assert_eq!(self.cols, rhs.cols);
@@ -117,7 +109,6 @@ impl Matrix {
         Matrix::from_vec(result_data, self.rows, self.cols)
     }
 
-    /// Elementwise multiplication (Hadamard product) — like numpy: a * b
     pub fn mul_elementwise(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.rows, rhs.rows);
         assert_eq!(self.cols, rhs.cols);
@@ -131,7 +122,7 @@ impl Matrix {
         Matrix::from_vec(result_data, self.rows, self.cols)
     }
 
-    /// Multiply every element by a scalar — like numpy: a * 0.01
+
     pub fn scale(&self, factor: f32) -> Matrix {
         let mut result_data = Vec::new();
 
@@ -142,7 +133,7 @@ impl Matrix {
         Matrix::from_vec(result_data, self.rows, self.cols)
     }
 
-    /// Apply any function to every element — like numpy: np.vectorize(f)(matrix)
+
     pub fn map<F: Fn(f32) -> f32>(&self, f: F) -> Matrix {
         let mut result_data = Vec::new();
 
@@ -153,8 +144,7 @@ impl Matrix {
         Matrix::from_vec(result_data, self.rows, self.cols)
     }
 
-    /// Add a bias vector (1 x cols) to every row of self (rows x cols)
-    /// Used constantly in neural networks: output = input.dot(weights) + bias
+
     pub fn add_bias_row(&self, bias: &Matrix) -> Matrix {
         assert_eq!(bias.rows, 1);
         assert_eq!(bias.cols, self.cols);
@@ -184,7 +174,7 @@ impl Matrix {
         }
 
         for col in 0..n {
-            // on cherche le pivot
+
             let pivot = aug.get(col, col);
             assert!(pivot.abs() > 1e-10, "Matrix is singular, cannot invert");
 
@@ -214,7 +204,7 @@ impl Matrix {
     }
 }
 
-// ---- Tests ----------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,8 +219,7 @@ mod tests {
 
     #[test]
     fn test_dot() {
-        // [1, 2]   [5, 6]   [19, 22]
-        // [3, 4] × [7, 8] = [43, 50]
+
         let a = Matrix::from_vec(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let b = Matrix::from_vec(vec![5.0, 6.0, 7.0, 8.0], 2, 2);
         let c = a.dot(&b);
@@ -240,9 +229,7 @@ mod tests {
 
     #[test]
     fn test_transpose() {
-        // [1, 2, 3]     [1, 4]
-        // [4, 5, 6]  →  [2, 5]
-        //               [3, 6]
+
         let a = Matrix::from_vec(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let t = a.transpose();
         assert_eq!(t.rows, 3);
@@ -270,8 +257,7 @@ mod tests {
 
     #[test]
     fn test_mul_elementwise() {
-        // [1, 2]   [5, 6]   [5,  12]
-        // [3, 4] * [7, 8] = [21, 32]
+
         let a = Matrix::from_vec(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let b = Matrix::from_vec(vec![5.0, 6.0, 7.0, 8.0], 2, 2);
         let c = a.mul_elementwise(&b);

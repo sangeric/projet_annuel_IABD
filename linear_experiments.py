@@ -1,15 +1,3 @@
-"""
-Felidae Rosenblatt — hyperparameter experiments for the report.
-
-  1. Learning rate sweep — impact of lr on convergence
-  2. Epochs sweep        — under/over-training
-  3. Seed variance       — stability across random inits
-  4. Confusion matrix    — per-class performance of the best config
-
-Plots saved under report_plots/rosenblatt_<name>.png
-Run from the PA root:
-    python rosenblatt_experiments.py
-"""
 
 import os
 import numpy as np
@@ -44,7 +32,7 @@ if os.name != "nt":
 else:
     lib = ffi.dlopen(os.path.join(BASE, "target/release/felidae_classifier.dll"))
 
-FEATURE_MODE = "extract"     # "extract" ou "flatten"
+FEATURE_MODE = "extract"
 IMG_SIZE = (32, 32)
 DATASET_ROOT = os.path.join(BASE, "dataset_clean")
 CLASS_NAMES = ["Cat", "Lion", "Cheetah"]
@@ -125,7 +113,7 @@ def save_plot(fig, name):
     print(f"  Saved plot: {path}")
 
 
-# --- Experiment 1: learning rate sweep ---
+
 def experiment_lr_sweep(data):
     print("\n=== Rosenblatt Experiment 1 — Learning rate sweep ===")
     (X_train, Y_train), (X_test, Y_test) = data
@@ -153,7 +141,7 @@ def experiment_lr_sweep(data):
     save_plot(fig, "rosenblatt_lr_sweep")
 
 
-# --- Experiment 2: epochs sweep ---
+
 def experiment_epochs_sweep(data):
     print("\n=== Rosenblatt Experiment 2 — Epochs sweep ===")
     (X_train, Y_train), (X_test, Y_test) = data
@@ -180,7 +168,7 @@ def experiment_epochs_sweep(data):
     save_plot(fig, "rosenblatt_epochs_sweep")
 
 
-# --- Experiment 3: seed variance ---
+
 def experiment_seed_variance(data):
     print("\n=== Rosenblatt Experiment 3 — Seed variance ===")
     (X_train, Y_train), (X_test, Y_test) = data
@@ -210,7 +198,7 @@ def experiment_seed_variance(data):
     save_plot(fig, "rosenblatt_seed_variance")
 
 
-# --- Experiment 4: confusion matrix ---
+
 def experiment_confusion(data):
     print("\n=== Rosenblatt Experiment 4 — Confusion matrix ===")
     (X_train, Y_train), (X_test, Y_test) = data

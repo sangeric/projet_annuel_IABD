@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::{Write, Read};
 
 pub struct MulticlassSVM {
-    classifiers: Vec<SVM>, // one per class, in class-index order
+    classifiers: Vec<SVM>,
 }
 
 impl MulticlassSVM {
@@ -67,7 +67,6 @@ impl MulticlassSVM {
         correct / labels.len() as f32
     }
 
-    // Saves all n_classes binary classifiers to a single file.
     pub fn save(&self, path: &str) -> Result<(), String> {
         let mut file = File::create(path).map_err(|e| format!("Failed to create {}: {}", path, e))?;
 
@@ -85,7 +84,7 @@ impl MulticlassSVM {
         Ok(())
     }
 
-    // Loads a MulticlassSVM previously written by save.
+
     pub fn load(path: &str) -> Result<MulticlassSVM, String> {
         let mut file = File::open(path).map_err(|e| format!("Failed to open {}: {}", path, e))?;
 
@@ -122,15 +121,15 @@ mod tests {
 
     fn toy_three_class_dataset() -> (Matrix, Vec<usize>) {
         let x = Matrix::from_vec(vec![
-            // class 0 — bottom-left
+
             0.1, 0.1,
             0.2, 0.15,
             0.15, 0.2,
-            // class 1 — top
+
             0.5, 0.9,
             0.55, 0.85,
             0.45, 0.88,
-            // class 2 — bottom-right
+
             0.9, 0.1,
             0.85, 0.15,
             0.88, 0.2,
@@ -148,8 +147,7 @@ mod tests {
 
     #[test]
     fn test_fits_well_separated_data_perfectly() {
-        // Three clean, far-apart clusters should be perfectly classified
-        // by their own training data.
+
         let (x, labels) = toy_three_class_dataset();
         let model = MulticlassSVM::train(&x, &labels, 3, Kernel::Linear);
         let acc = model.accuracy(&x, &labels);
@@ -175,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_forward_shape() {
-        // forward() should return one row per example, one column per class.
+
         let (x, labels) = toy_three_class_dataset();
         let model = MulticlassSVM::train(&x, &labels, 3, Kernel::Linear);
         let scores = model.forward(&x);
@@ -187,19 +185,15 @@ mod tests {
 
     #[test]
     fn test_argmax_picks_least_negative_when_all_reject() {
-        // Directly test the "all three classifiers say no, pick the least
-        // negative" logic we discussed, using a point sitting just outside
-        // class 0's cluster but far from classes 1 and 2.
+
         let (x, labels) = toy_three_class_dataset();
         let model = MulticlassSVM::train(&x, &labels, 3, Kernel::Linear);
 
-        // A point just past the class-0 cluster's edge, still much closer
-        // to class 0 than to the other two clusters.
+
         let query = Matrix::from_vec(vec![0.05, 0.3], 1, 2);
         let scores = model.forward(&query);
 
-        // class 0's decision value should be the largest of the three,
-        // even if it happens to be negative.
+
         let class0_score = scores[0][0];
         let class1_score = scores[0][1];
         let class2_score = scores[0][2];
@@ -212,17 +206,15 @@ mod tests {
 
     #[test]
     fn test_rbf_kernel_handles_nonlinear_three_class_case() {
-        // A case built so no straight line can separate all three classes
-        // (borrowing the same interleaved idea as the MLP's XOR dataset,
-        // extended to 3 classes with a kernel that can bend the boundary).
+
         let x = Matrix::from_vec(vec![
-            // class 0 — corners
+
             0.1, 0.1,
             0.9, 0.9,
-            // class 1 — opposite corners
+
             0.9, 0.1,
             0.1, 0.9,
-            // class 2 — center
+
             0.5, 0.5,
             0.52, 0.48,
         ], 6, 2);

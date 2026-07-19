@@ -33,15 +33,12 @@ ffi.cdef("""
 BASE = os.path.abspath("felidae_classifier")
 lib = ffi.dlopen(os.path.join(BASE, "target/release/libfelidae_classifier.so"))
 
-# Input representation:
-#   "extract" -> 20 hand-crafted features via the Rust extract_features pipeline
-#   "flatten" -> raw pixels, resized and (optionally) grayscaled, fed in directly
-# In flatten mode we do NOT call extract_features; the pixels go straight to the model.
-FEATURE_MODE = "extract"     # "extract" or "flatten"
-FLATTEN_DIM = 28             # flatten mode resizes images to FLATTEN_DIM x FLATTEN_DIM
-FLATTEN_GRAYSCALE = True     # grayscale keeps the feature count under the 10% rule
 
-IMG_SIZE = (32, 32)          # extract mode always uses 32x32 RGB (what extract expects)
+FEATURE_MODE = "extract"
+FLATTEN_DIM = 28
+FLATTEN_GRAYSCALE = True
+
+IMG_SIZE = (32, 32)
 DATASET_ROOT = os.path.join(BASE, "dataset_clean")
 CLASS_NAMES = ["Cat", "Lion", "Cheetah"]
 
@@ -60,26 +57,26 @@ PLOTS_DIR = os.path.abspath("report_plots")
 os.makedirs(RUNS_DIR, exist_ok=True)
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
-# Reproducibility for the numpy-side splits
+
 np.random.seed(42)
 
 
 def features_from_image(path):
-    """Turn one image file into a feature vector according to FEATURE_MODE."""
+
     if FEATURE_MODE == "extract":
         img = Image.open(path).convert("RGB").resize(IMG_SIZE)
         arr = np.ascontiguousarray(np.array(img, dtype=np.float32).flatten() / 255.0, dtype=np.float32)
         out = ffi.new("float[]", N_FEATURES)
         lib.extract_features(ffi.from_buffer("float[]", arr), out, N_FEATURES)
         return np.array([out[i] for i in range(N_FEATURES)], dtype=np.float32)
-    else:  # flatten: raw pixels straight in, no extract_features call
+    else:
         mode = "L" if FLATTEN_GRAYSCALE else "RGB"
         img = Image.open(path).convert(mode).resize((FLATTEN_DIM, FLATTEN_DIM))
         return np.array(img, dtype=np.float32).flatten() / 255.0
 
 
 def load_felidae(max_per_class):
-    """Load the felidae dataset, using extract features or raw pixels per FEATURE_MODE."""
+
     class_folders = {"cat": 0, "cheetah": 1, "lion": 2}
     X, Y = [], []
     for folder, label in class_folders.items():
@@ -428,9 +425,9 @@ def experiment_8_confusion(data):
             print(f"    {name}: {np.mean(preds[mask] == i) * 100:.1f}%")
 
 
-# ============================================================================
+
 # MAIN
-# ============================================================================
+
 def main():
     print("Loading main dataset (1000/class)...")
     X, Y, labels = load_felidae(max_per_class=1000)
@@ -442,8 +439,8 @@ def main():
     experiment_1_learning_rate(data)
     experiment_2_epochs(data)
     experiment_3_depth(data)
-    experiment_4_dataset_size()          # loads its own 3000/class
-    experiment_5_overfitting()           # loads its own 50/class
+    experiment_4_dataset_size()
+    experiment_5_overfitting()
     experiment_6_underfitting(data)
     experiment_7_sweet_spot(data)
     experiment_8_confusion(data)

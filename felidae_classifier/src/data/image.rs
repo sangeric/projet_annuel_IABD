@@ -10,7 +10,6 @@ pub struct LoadedImage {
     pub height: u32,
 }
 
-// Usage of Result<T, E> here because load can fail in many ways so it requires explicit error handling
 impl LoadedImage {
     pub fn load(path: &str) -> Result<LoadedImage, String> {
         let img = match image::open(path) {
@@ -18,16 +17,15 @@ impl LoadedImage {
             Err(e) => return Err(format!("Failed to open {}: {}", path, e)),
         };
 
-        let resized = img.resize_exact(IMAGE_SIZE, IMAGE_SIZE, FilterType::Triangle); // If details seem off, you can use Lanczos3 for better quality or Gaussian for better denoising
+        let resized = img.resize_exact(IMAGE_SIZE, IMAGE_SIZE, FilterType::Triangle);
 
         let rgb = resized.to_rgb8();
 
-        // divide by 255 to normalize pixel colors to be between 0.0 and 1.0
         let mut pixels = Vec::new();
         for pixel in rgb.pixels() {
-            pixels.push(pixel[0] as f32 / 255.0); // red
-            pixels.push(pixel[1] as f32 / 255.0); // green
-            pixels.push(pixel[2] as f32 / 255.0); // blue
+            pixels.push(pixel[0] as f32 / 255.0);
+            pixels.push(pixel[1] as f32 / 255.0);
+            pixels.push(pixel[2] as f32 / 255.0);
         }
 
         Ok(LoadedImage {

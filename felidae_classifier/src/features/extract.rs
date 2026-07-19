@@ -2,32 +2,19 @@
 
 use crate::data::image::LoadedImage;
 
-// Number of features extract() produces.
-// 6 color stats + 8 histogram + 6 edge = 20 features
+
 pub const FEATURE_COUNT: usize = 20;
 
-// Number of brightness histogram buckets.
+
 const N_HIST_BUCKETS: usize = 8;
 
-// Two edge-detection thresholds for richer texture information.
+
 const EDGE_THRESHOLDS: [f32; 2] = [0.1, 0.25];
 
-/// Extracts a fixed-size feature vector from a loaded image.
-///
-/// Features (in order):
-///   [0..6]   color stats: mean_r, mean_g, mean_b, std_r, std_g, std_b
-///   [6..14]  brightness histogram: 8 buckets covering 0.0 to 1.0
-///   [14..20] edge density: 3 channels × 2 thresholds
-///
-/// These features capture:
-///   - average color of the subject
-///   - color variation (uniform vs patterned)
-///   - brightness distribution
-///   - texture density (smooth vs textured surfaces)
+
 pub fn extract(image: &LoadedImage) -> Vec<f32> {
     let mut features = Vec::new();
 
-    // Group 1: per-channel mean and standard deviation
     let (mean_r, mean_g, mean_b) = channel_means(image);
     features.push(mean_r);
     features.push(mean_g);
@@ -38,13 +25,13 @@ pub fn extract(image: &LoadedImage) -> Vec<f32> {
     features.push(std_g);
     features.push(std_b);
 
-    // Group 2: brightness histogram
+
     let histogram = brightness_histogram(image);
     for bucket in histogram {
         features.push(bucket);
     }
 
-    // Group 3: edge density per channel, at each threshold
+
     for threshold in EDGE_THRESHOLDS {
         let (e_r, e_g, e_b) = edge_density(image, threshold);
         features.push(e_r);
@@ -55,12 +42,12 @@ pub fn extract(image: &LoadedImage) -> Vec<f32> {
     features
 }
 
-// Returns the number of features extract() produces.
+
 pub fn feature_count() -> usize {
     FEATURE_COUNT
 }
 
-// Mean value of each color channel across all pixels.
+
 fn channel_means(image: &LoadedImage) -> (f32, f32, f32) {
     let mut sum_r = 0.0_f32;
     let mut sum_g = 0.0_f32;
@@ -79,8 +66,7 @@ fn channel_means(image: &LoadedImage) -> (f32, f32, f32) {
     (sum_r / n_pixels, sum_g / n_pixels, sum_b / n_pixels)
 }
 
-// Standard deviation per color channel.
-// High std = lots of color variation; low std = uniform color.
+
 fn channel_stds(image: &LoadedImage, mean_r: f32, mean_g: f32, mean_b: f32) -> (f32, f32, f32) {
     let mut sum_sq_r = 0.0_f32;
     let mut sum_sq_g = 0.0_f32;
@@ -103,9 +89,7 @@ fn channel_stds(image: &LoadedImage, mean_r: f32, mean_g: f32, mean_b: f32) -> (
     )
 }
 
-// 8-bucket histogram of pixel brightnesses (average of R, G, B per pixel).
-// Each bucket value is the fraction of pixels falling in that bucket.
-// Returns a Vec<f32> of length 8, summing to 1.0.
+
 fn brightness_histogram(image: &LoadedImage) -> Vec<f32> {
     let mut counts = vec![0.0_f32; N_HIST_BUCKETS];
     let n_pixels = (image.width * image.height) as f32;
@@ -129,9 +113,7 @@ fn brightness_histogram(image: &LoadedImage) -> Vec<f32> {
     counts
 }
 
-// Edge density per channel — fraction of pixels whose value differs from a
-// neighbour by more than a threshold.
-// High edge density = textured surface. Low = smooth surface.
+
 fn edge_density(image: &LoadedImage, threshold: f32) -> (f32, f32, f32) {
     let mut edges_r = 0.0_f32;
     let mut edges_g = 0.0_f32;
@@ -212,7 +194,7 @@ mod tests {
     fn test_uniform_image_means() {
         let img = make_uniform_image(1.0, 0.0, 0.0);
         let features = extract(&img);
-        println!("features[0..6] = {:?}", &features[0..6]);   // ← add this
+        println!("features[0..6] = {:?}", &features[0..6]);
         assert!((features[0] - 1.0).abs() < 1e-5);
         assert!((features[1] - 0.0).abs() < 1e-5);
         assert!((features[2] - 0.0).abs() < 1e-5);

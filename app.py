@@ -99,10 +99,7 @@ IMG_SIZE = (32, 32)
 DATASET_ROOT = os.path.join(BASE, "dataset_clean")
 DATASET_ROOT_NOTCLEANED = os.path.join(BASE, "dataset")
 
-# --- Metadata helpers ---
-# Each model stores its own metadata (which feature mode it was trained with,
-# plus any model-specific hyperparameters) so inference can reproduce the exact
-# preprocessing used at training time.
+
 def save_model_meta(model_name, meta):
     with open(os.path.join(MODEL_DIR, model_name, f"{model_name}_meta.json"), "w") as f:
         json.dump(meta, f)
@@ -366,7 +363,7 @@ def predict_rbfn(X):
     lib.rbfn_destroy(model)
 
     predicted = int(out_cls[0])
-    # RBFN exposes only the class index, so we show a hard 1.0 on the winner.
+
     scores = {name: (1.0 if i == predicted else 0.0) for i, name in enumerate(CLASS_NAMES)}
     return scores, None
 
@@ -384,10 +381,10 @@ def train_and_save_svm(kernel_choice, gamma, c, max_samples_per_class, feature_m
     if len(X) == 0:
         return "No dataset found at: " + DATASET_ROOT
 
-    # SVM labels are class indices, not one-hot. Recover them from the one-hot Y.
+
     labels = np.argmax(Y, axis=1).astype(np.uint32)
 
-    # hold out 20% as a test set the model never trains on
+
     rng = np.random.default_rng(42)
     idx = rng.permutation(len(X))
     split = int(0.8 * len(X))
@@ -457,7 +454,7 @@ def predict_svm(X):
     lib.svm_destroy(model)
 
     predicted = int(out_cls[0])
-    # SVM exposes only the class index, so we show a hard 1.0 on the winner.
+
     scores = {name: (1.0 if i == predicted else 0.0) for i, name in enumerate(CLASS_NAMES)}
     return scores, None
 
@@ -610,30 +607,30 @@ def check_model_status():
     mlp_path = os.path.join(MODEL_DIR, "mlp", "mlp.bin")
     if os.path.exists(mlp_path):
         mode = load_model_meta("mlp")["feature_mode"]
-        lines.append(f"✅ MLP — ready ({mode})")
+        lines.append(f"MLP — ready ({mode})")
     else:
-        lines.append("❌ MLP — not trained")
+        lines.append("MLP — not trained")
 
     rbfn_path = os.path.join(MODEL_DIR, "rbfn", "rbfn.bin")
     if os.path.exists(rbfn_path):
         meta = load_model_meta("rbfn")
-        lines.append(f"✅ RBFN - ready ({meta['feature_mode']}, K={meta.get('k', '?')}, gamma={meta.get('gamma', '?')})")
+        lines.append(f"RBFN - ready ({meta['feature_mode']}, K={meta.get('k', '?')}, gamma={meta.get('gamma', '?')})")
     else:
-        lines.append("❌ RBFN — not trained")
+        lines.append("RBFN — not trained")
 
     linear_path = os.path.join(MODEL_DIR, "linear", "rosenblatt.bin")
     if os.path.exists(linear_path):
         mode = load_model_meta("linear")["feature_mode"]
-        lines.append(f"✅ Linear (Rosenblatt) - ready ({mode})")
+        lines.append(f"Linear (Rosenblatt) - ready ({mode})")
     else:
-        lines.append("❌ Linear (Rosenblatt) - not trained")
+        lines.append("Linear (Rosenblatt) - not trained")
 
     svm_path = os.path.join(MODEL_DIR, "svm", "svm.bin")
     if os.path.exists(svm_path):
         meta = load_model_meta("svm")
-        lines.append(f"✅ SVM — ready ({meta['feature_mode']}, {meta.get('kernel', '?')}, gamma={meta.get('gamma', '?')}, C={meta.get('c', '?')})")
+        lines.append(f"SVM — ready ({meta['feature_mode']}, {meta.get('kernel', '?')}, gamma={meta.get('gamma', '?')}, C={meta.get('c', '?')})")
     else:
-        lines.append("❌ SVM — not trained")
+        lines.append("SVM — not trained")
     return "\n".join(lines)
 
 

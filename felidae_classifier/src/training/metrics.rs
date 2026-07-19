@@ -7,18 +7,18 @@ pub fn confusion_matrix(predictions: &[usize], labels: &[usize], n_classes: usiz
         "predictions and labels must have the same length"
     );
 
-    // Initialize an n_classes × n_classes matrix of zeros
+
     let mut matrix = Vec::new();
     for _ in 0..n_classes {
         matrix.push(vec![0_usize; n_classes]);
     }
 
-    // For each sample, increment matrix[true_label][predicted_label]
+
     for i in 0..predictions.len() {
         let true_label = labels[i];
         let predicted_label = predictions[i];
 
-        // Defensive — skip any labels outside the expected range rather than crash
+
         if true_label < n_classes && predicted_label < n_classes {
             matrix[true_label][predicted_label] += 1;
         }
@@ -67,14 +67,14 @@ pub fn print_confusion_matrix(matrix: &[Vec<usize>], class_names: &[String]) {
     }
 }
 
-// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_perfect_predictions() {
-        // If predictions match labels, only the diagonal should be non-zero
+
         let labels = vec![0, 1, 2, 0, 1, 2];
         let predictions = vec![0, 1, 2, 0, 1, 2];
         let matrix = confusion_matrix(&predictions, &labels, 3);
@@ -102,9 +102,9 @@ mod tests {
         assert_eq!(matrix[1][1], 0);
         assert_eq!(matrix[2][2], 0);
 
-        assert_eq!(matrix[0][1], 1); // true 0, predicted 1
-        assert_eq!(matrix[1][2], 1); // true 1, predicted 2
-        assert_eq!(matrix[2][0], 1); // true 2, predicted 0
+        assert_eq!(matrix[0][1], 1);
+        assert_eq!(matrix[1][2], 1);
+        assert_eq!(matrix[2][0], 1);
     }
 
     #[test]

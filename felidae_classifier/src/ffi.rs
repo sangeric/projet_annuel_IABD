@@ -64,7 +64,7 @@ pub extern "C" fn mlp_train(
     let x = Matrix::from_vec(x_vec, x_rows, x_cols);
     let y = Matrix::from_vec(y_vec, y_rows, y_cols);
 
-    // No test split from FFI — pass same data for train and test
+
     mlp.train(&x, &y, &x, &y, epochs, learning_rate, &log_dir);
 }
 
@@ -268,7 +268,7 @@ pub extern "C" fn svm_train(
     labels: *const u32,
     n_labels: usize,
     n_classes: usize,
-    kernel_type: u32,   // 0 = Linear, 1 = Rbf
+    kernel_type: u32,
     gamma: f32,
     c: f32,
 ) -> *mut MulticlassSVM {

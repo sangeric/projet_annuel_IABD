@@ -11,21 +11,19 @@ use std::fs::File;
 use std::io::{Read, Write};
 
 pub struct SVM {
-    support_vectors: Matrix,   // (n_sv x n_features)
-    sv_weights: Vec<f32>,      // alpha_n * y_n, one per support vector
-    bias: f32,                 // w0
+    support_vectors: Matrix,
+    sv_weights: Vec<f32>,
+    bias: f32,
     kernel: Kernel,
 }
 
-// Below this, an alpha is treated as numerical noise rather than a genuine support vector — floating point solvers essentially never return an exact 0.0.
 const ALPHA_THRESHOLD: f32 = 1e-4;
 
 impl SVM {
     pub fn train(x: &Matrix, y: &[f32], kernel: Kernel, c: f32) -> Self {
         let alpha = solve_dual(x, y, &kernel, c);
 
-        // Keep only the support vectors (slide 125-127: alpha_n = 0 for
-        // every example that is NOT a support vector).
+
         let mut sv_indices = Vec::new();
         for (i, &a) in alpha.iter().enumerate() {
             if a > ALPHA_THRESHOLD {
@@ -46,13 +44,7 @@ impl SVM {
 
         let support_vectors = Matrix::from_vec(sv_data, sv_indices.len(), n_features);
 
-        // Recover w0 (slides 123-124): average over all support vectors
-        // for numerical stability, rather than picking just one.
-        //   w0 = 1/y_n - sum_i(w_i * X_ni)     for each support vector n
-        // With a kernel, "sum_i(w_i * X_ni)" becomes the kernelized
-        // decision value MINUS the bias, i.e. we solve:
-        //   y_n * (sum_m alpha_m y_m K(X_m, X_n) + w0) = 1
-        //   w0 = 1/y_n - sum_m alpha_m y_m K(X_m, X_n)
+
         let mut bias_sum = 0.0_f32;
         let mut n_free = 0;
         for &i in &sv_indices {
@@ -110,8 +102,7 @@ impl SVM {
         self.support_vectors.rows
     }
 
-    // Writes this classifier's kernel, bias, and support vectors to an already-open file. Used internally by MulticlassSVM::save, a
-    // single SVM on its own isn't usually what you persist, since the felidae case always needs one-vs-rest.
+
     pub fn write_to(&self, file: &mut File) -> Result<(), String> {
         let (kernel_type, gamma): (u8, f32) = match self.kernel {
             Kernel::Linear => (0, 0.0),
@@ -137,7 +128,7 @@ impl SVM {
         Ok(())    
     }
 
-    // Reads one classifier back from an already-open file, the exact mirror of write_to.
+
     pub fn read_from(file: &mut File) -> Result<SVM, String> {
         let read_u8 = |file: &mut File| -> Result<u8, String> {
             let mut buf = [0u8; 1];
@@ -188,7 +179,7 @@ impl SVM {
 mod tests {
     use super::*;
 
-    // Two clusters far apart on a line, cleanly separable.
+
     fn toy_linear_dataset() -> (Matrix, Vec<f32>) {
         let x = Matrix::from_vec(vec![
             0.0, 0.0,
@@ -204,8 +195,7 @@ mod tests {
 
     #[test]
     fn test_linear_svm_fits_training_data() {
-        // A clean, well-separated dataset should be perfectly classified
-        // by its own training data.
+
         let (x, y) = toy_linear_dataset();
         let svm = SVM::train(&x, &y, Kernel::Linear);
         let acc = svm.accuracy(&x, &y);
@@ -214,10 +204,7 @@ mod tests {
 
     #[test]
     fn test_svm_uses_fewer_support_vectors_than_examples() {
-        // The whole point of the SVM (slide 127): only the points near the
-        // boundary matter. With two well-separated clusters, most of the
-        // 6 examples are "obviously" on their side and shouldn't become
-        // support vectors.
+
         let (x, y) = toy_linear_dataset();
         let svm = SVM::train(&x, &y, Kernel::Linear);
         assert!(
@@ -229,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_bias_near_zero_for_symmetric_data() {
-        // Data symmetric around the origin should need little repositioning.
+
         let x = Matrix::from_vec(vec![
             -1.0, 0.0,
              1.0, 0.0,
@@ -241,13 +228,12 @@ mod tests {
 
     #[test]
     fn test_rbf_kernel_solves_nonlinear_case() {
-        // A case the linear kernel cannot solve: one class surrounds the
-        // other (concentric-ish clusters), no straight line separates them.
+
         let x = Matrix::from_vec(vec![
-            0.0, 0.0,      // inner cluster: class -1
+            0.0, 0.0,
             0.1, 0.1,
             -0.1, 0.1,
-            5.0, 0.0,      // outer ring: class 1
+            5.0, 0.0,
             0.0, 5.0,
             -5.0, 0.0,
             0.0, -5.0,

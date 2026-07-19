@@ -90,18 +90,7 @@ impl RosenblattClassifier{
         println!("Cheetah-> learning_rate: {}, bias: {}", self.cheetah.get_learning_rate(), self.cheetah.get_bias());
     }
 
-    // File format:
-    //   [4 bytes] magic number "RBLC"
-    //   [4 bytes] format version (u32 little-endian, currently 1)
-    //
-    //   Repeated 3 times (Cat, Cheetah, Lion):
-    //     [8 bytes] random seed (u64 little-endian)
-    //     [4 bytes] learning rate (f32 little-endian)
-    //     [4 bytes] bias (f32 little-endian)
-    //     [4 bytes] weights.rows (u32)
-    //     [4 bytes] weights.cols (u32)
-    //     [weights.rows × weights.cols × 4 bytes]
-    //         weights data (f32 each)
+
     pub fn save(&self, path: &str, seeds: [u64; 3]) -> Result<(), String> {
         let mut file = match File::create(path) {
             Ok(f) => f,

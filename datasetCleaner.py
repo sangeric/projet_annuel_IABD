@@ -65,13 +65,12 @@ for img_path in tqdm(img_paths, desc="Cleaning dataset"):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     cropped.save(out_path)
 
-    # track per class (subfolder name = cat/lion/cheetah)
     class_name = img_path.parent.name
     stats["by_class"][class_name] = stats["by_class"].get(class_name, {"kept": 0, "discarded": 0})
     stats["by_class"][class_name]["kept"] += 1
     stats["kept"] += 1
 
-# fill discarded counts per class
+
 for img_path in img_paths:
     class_name = img_path.parent.name
     if class_name not in stats["by_class"]:

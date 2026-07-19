@@ -7,8 +7,7 @@ use crate::models::rbfn::basis::squared_distance;
 pub fn kmeans(x: &Matrix, k: usize, max_iters: usize, seed: u64) -> Matrix {
     let n_features = x.cols;
 
-    // Initialise the centers Matrix by picking k examples throughout the dataset
-    // It is reproductible thanks to the seed
+
     let mut centers = Matrix::zeros(k, n_features);
     let stride = if k > 0 { x.rows / k } else { 1 };
     for c in 0..k {
@@ -19,7 +18,6 @@ pub fn kmeans(x: &Matrix, k: usize, max_iters: usize, seed: u64) -> Matrix {
     }
 
     for _iter in 0..max_iters {
-        // Step 1: assign each example to its nearest center.
         let mut assignements = Vec::new();
         for i in 0..x.rows {
             let mut best_center = 0;
@@ -34,7 +32,7 @@ pub fn kmeans(x: &Matrix, k: usize, max_iters: usize, seed: u64) -> Matrix {
             assignements.push(best_center);
         }
 
-        // Step 2: move each center to the mean of its assigned examples.
+
         let mut new_centers = Matrix::zeros(k, n_features);
         let mut counts = vec![0.0_f32; k];
 
@@ -54,7 +52,7 @@ pub fn kmeans(x: &Matrix, k: usize, max_iters: usize, seed: u64) -> Matrix {
                     new_centers.set(c, j, val);
                 }
             } else {
-                // Empty cluster: keep the old center to avoid a dead center.
+
                 for j in 0..n_features {
                     new_centers.set(c, j, centers.get(c, j));
                 }
@@ -71,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_kmeans_output_shape() {
-        // 6 examples in 2D, ask for 2 centers => output must be 2 x 2.
+
         let x = Matrix::from_vec(vec![
             0.0, 0.0,
             0.1, 0.1,
@@ -87,8 +85,7 @@ mod tests {
 
     #[test]
     fn test_kmeans_finds_two_clear_clusters() {
-        // Two tight groups: one near (0,0), one near (10,10).
-        // After k-means, one center should land near each group.
+
         let x = Matrix::from_vec(vec![
             0.0, 0.0,
             0.2, 0.1,
@@ -99,9 +96,7 @@ mod tests {
         ], 6, 2);
         let centers = kmeans(&x, 2, 20, 0);
 
-        // Each center should be close to either (0,0) or (10,10).
-        // We check that the two centers are far apart from each other,
-        // which means k-means separated the two groups.
+
         let dist_between_centers = squared_distance(&centers, 0, &centers, 1);
         assert!(dist_between_centers > 50.0,
             "centers should be far apart, got squared distance {}", dist_between_centers);
@@ -109,8 +104,7 @@ mod tests {
 
     #[test]
     fn test_kmeans_center_is_near_its_points() {
-        // A single cluster of points near (2, 2). With k=1, the single center
-        // must be the mean of all points, i.e. near (2, 2).
+
         let x = Matrix::from_vec(vec![
             1.9, 2.1,
             2.0, 2.0,

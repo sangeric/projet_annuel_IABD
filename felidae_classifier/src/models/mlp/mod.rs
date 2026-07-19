@@ -27,6 +27,7 @@ impl MLP {
     ///
     /// Both activation names must be recognised by activation::lookup
     /// (currently "tanh", "relu", or "identity").
+
     pub fn new(layers_sizes: &[usize], activation: &str, output_activation: &str) -> Result<MLP, String> {
         let mut new_layers: Vec<Layer> = Vec::new();
 
@@ -67,8 +68,7 @@ impl MLP {
         cache
     }
 
-    /// One backward pass for a single sample.
-    /// expected is a (1 * n_outputs) row matrix holding the target values.
+
     fn backward(&mut self, cache: &Vec<Matrix>, expected: &Matrix, learning_rate: f32) {
         let last_output = &cache[cache.len() - 1];
         let diff = last_output.sub(expected);
@@ -91,8 +91,7 @@ impl MLP {
         }
     }
 
-    /// Predicts a class index per row of x (argmax over the network output).
-    /// Only meaningful for classification.
+
     pub fn predict(&self, x: &Matrix) -> Vec<usize> {
         let probs = self.forward(x);
         let mut predictions = Vec::new();
@@ -115,8 +114,7 @@ impl MLP {
         predictions
     }
 
-    /// Classification accuracy. Compares argmax of predictions to argmax of y.
-    /// Only meaningful when y is one-hot encoded.
+
     pub fn accuracy(&self, x: &Matrix, y: &Matrix) -> f32 {
         let predictions = self.predict(x);
         let mut correct = 0;
@@ -139,8 +137,7 @@ impl MLP {
         correct as f32 / predictions.len() as f32
     }
 
-    /// Trains the network using stochastic gradient descent, one full shuffled
-    /// pass through x_train per epoch. Logs loss and accuracy to tensorboard.
+
     pub fn train(
         &mut self,
         x_train: &Matrix,
@@ -158,14 +155,14 @@ impl MLP {
             let mut total_loss = 0.0_f32;
 
             for &i in &order {
-                // Extract sample i
+
                 let mut sample_data = Vec::new();
                 for j in 0..x_train.cols {
                     sample_data.push(x_train.get(i, j));
                 }
                 let sample = Matrix::from_vec(sample_data, 1, x_train.cols);
 
-                // Extract expected output i
+
                 let mut expected_data = Vec::new();
                 for j in 0..y_train.cols {
                     expected_data.push(y_train.get(i, j));
@@ -195,43 +192,31 @@ impl MLP {
         }
     }
 
-    /// Saves the trained model to a binary file.
-    ///
-    /// File format:
-    ///   [4 bytes] magic number "MLPv"
-    ///   [4 bytes] format version (u32 little-endian, currently 1)
-    ///   [4 bytes] n_layers (u32 little-endian)
-    ///   For each layer:
-    ///     [4 bytes] activation name length (u32 little-endian)
-    ///     [length bytes] activation name (UTF-8)
-    ///     [4 bytes] weights.rows (u32 little-endian)
-    ///     [4 bytes] weights.cols (u32 little-endian)
-    ///     [rows × cols × 4 bytes] weights data (f32 each little-endian)
-    ///     [cols × 4 bytes] biases data (f32 each little-endian)
+
     pub fn save(&self, path: &str) -> Result<(), String> {
         let mut file = match File::create(path) {
             Ok(f) => f,
             Err(e) => return Err(format!("Failed to create {}: {}", path, e)),
         };
 
-        // Magic number
+
         if let Err(e) = file.write_all(b"MLPv") {
             return Err(format!("write failed: {}", e));
         }
 
-        // Format version
+
         let version: u32 = 1;
         if let Err(e) = file.write_all(&version.to_le_bytes()) {
             return Err(format!("write failed: {}", e));
         }
 
-        // Number of layers
+
         let n_layers = self.layers.len() as u32;
         if let Err(e) = file.write_all(&n_layers.to_le_bytes()) {
             return Err(format!("write failed: {}", e));
         }
 
-        // Each layer
+
         for layer in &self.layers {
             let name_bytes = layer.activation_name.as_bytes();
             let name_len = name_bytes.len() as u32;
@@ -256,7 +241,7 @@ impl MLP {
                 }
             }
 
-            // Biases — always 1 * w_cols, no need to store rows
+
             for &value in &layer.biases.data {
                 if let Err(e) = file.write_all(&value.to_le_bytes()) {
                     return Err(format!("write failed: {}", e));
@@ -267,15 +252,14 @@ impl MLP {
         Ok(())
     }
 
-    /// Loads a model previously written by save.
-    /// Verifies the magic number and version before parsing.
+
     pub fn load(path: &str) -> Result<MLP, String> {
         let mut file = match File::open(path) {
             Ok(f) => f,
             Err(e) => return Err(format!("Failed to open {}: {}", path, e)),
         };
 
-        // Inline helpers that capture &mut file
+
         let read_u32 = |file: &mut File| -> Result<u32, String> {
             let mut buf = [0u8; 4];
             if let Err(e) = file.read_exact(&mut buf) {
@@ -291,7 +275,7 @@ impl MLP {
             Ok(f32::from_le_bytes(buf))
         };
 
-        // Magic number
+
         let mut magic = [0u8; 4];
         if let Err(e) = file.read_exact(&mut magic) {
             return Err(format!("read failed: {}", e));
@@ -300,7 +284,7 @@ impl MLP {
             return Err(format!("Not an MLP model file: bad magic number {:?}", magic));
         }
 
-        // Format version
+
         let version = read_u32(&mut file)?;
         if version != 1 {
             return Err(format!(
@@ -313,7 +297,7 @@ impl MLP {
 
         let mut layers: Vec<Layer> = Vec::new();
         for _ in 0..n_layers {
-            // Activation name
+
             let name_len = read_u32(&mut file)? as usize;
             let mut name_bytes = vec![0u8; name_len];
             if let Err(e) = file.read_exact(&mut name_bytes) {
@@ -324,10 +308,10 @@ impl MLP {
                 Err(e) => return Err(format!("invalid utf8 in activation name: {}", e)),
             };
 
-            // Reconstruct the activation function pointers from the name
+
             let (activation, activation_derivative) = lookup(&name)?;
 
-            // Weights
+
             let w_rows = read_u32(&mut file)? as usize;
             let w_cols = read_u32(&mut file)? as usize;
             let mut w_data = Vec::with_capacity(w_rows * w_cols);
@@ -336,7 +320,7 @@ impl MLP {
             }
             let weights = Matrix::from_vec(w_data, w_rows, w_cols);
 
-            // Biases — always 1 * w_cols
+
             let mut b_data = Vec::with_capacity(w_cols);
             for _ in 0..w_cols {
                 b_data.push(read_f32(&mut file)?);
@@ -362,11 +346,11 @@ mod tests {
 
     fn make_simple_data() -> (Matrix, Matrix) {
         let x_data = vec![
-            0.1_f32, 0.1,  // class 0
-            0.5,     0.9,  // class 1
-            0.9,     0.1,  // class 2
+            0.1_f32, 0.1,
+            0.5,     0.9,
+            0.9,     0.1,
         ];
-        // One-hot +/-1 encoded labels
+
         let y_data = vec![
              1.0, -1.0, -1.0,
             -1.0,  1.0, -1.0,
@@ -452,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_save_and_load_roundtrip() {
-        // Build a small MLP, train briefly, save, load, compare predictions.
+
         let mut original = MLP::new(&[2, 4, 3], "tanh", "tanh").unwrap();
         let (x, y) = make_simple_data();
         original.train(&x, &y, &x, &y, 5, 0.05, "/tmp/test_runs");
@@ -462,13 +446,13 @@ mod tests {
 
         let loaded = MLP::load(path).expect("load failed");
 
-        // Predictions must match exactly
+
         assert_eq!(original.predict(&x), loaded.predict(&x));
 
-        // Layer counts must match
+
         assert_eq!(original.layers.len(), loaded.layers.len());
 
-        // Weights must be bit-identical and activation names preserved
+
         for li in 0..original.layers.len() {
             let orig = &original.layers[li];
             let ld = &loaded.layers[li];

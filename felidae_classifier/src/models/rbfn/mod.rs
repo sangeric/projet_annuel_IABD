@@ -17,21 +17,17 @@ pub struct RBFN {
 
 impl RBFN {
     pub fn train(x: &Matrix, y: &Matrix, k: usize, gamma: f32, kmeans_iters: usize, seed: u64) -> Self {
-        // Step 1: find the K centers
+
         let centers = kmeans(x, k, kmeans_iters, seed);
 
-        // Step 2: build the Phi matrix (N x K)
+
         let phi = build_phi(x, &centers, gamma);
 
-        // Step 3: pseudo-inverse solve
-        // W = (Phi^T Phi)^-1 Phi^T Y
-        // I have encountered an issue when trying to inverse the Phi^T Phi  is singular or nearly
-        // singular (which is common in high dimensions so my fix to that is to add a small lambda*I
-        // W = (Phi^T Phi + lambda*I)^-1 Phi^T Y
+
         let phi_t = phi.transpose();
         let mut phi_t_phi = phi_t.dot(&phi);
 
-        // add lambda to the diagonal
+
         let lambda = 1e-6;
         for i in 0..phi_t_phi.rows {
             let v = phi_t_phi.get(i, i) + lambda;
@@ -98,18 +94,7 @@ impl RBFN {
         correct / y.rows as f32
     }
 
-    /// Saves the trained RBFN to a binary file.
-    ///
-    /// File format:
-    ///   [4 bytes] magic number "RBFv"
-    ///   [4 bytes] format version (u32 little-endian, currently 1)
-    ///   [4 bytes] gamma (f32 little-endian)
-    ///   [4 bytes] centers.rows (u32) = K
-    ///   [4 bytes] centers.cols (u32) = n_features
-    ///   [K × n_features × 4 bytes] centers data (f32 each)
-    ///   [4 bytes] weights.rows (u32) = K
-    ///   [4 bytes] weights.cols (u32) = n_outputs
-    ///   [K × n_outputs × 4 bytes] weights data (f32 each)
+
     pub fn save(&self, path: &str) -> Result<(), String> {
         let mut file = match File::create(path) {
             Ok(f) => f,
@@ -141,7 +126,6 @@ impl RBFN {
             }
         }
 
-        // weights matrix
         if let Err(e) = file.write_all(&(self.weights.rows as u32).to_le_bytes()) {
             return Err(format!("write failed: {}", e));
         }
@@ -157,7 +141,6 @@ impl RBFN {
         Ok(())
     }
 
-    /// Loads an RBFN previously written by save.
     pub fn load(path: &str) -> Result<RBFN, String> {
         let mut file = match File::open(path) {
             Ok(f) => f,
@@ -207,7 +190,6 @@ impl RBFN {
 
         let w_rows = read_u32(&mut file)? as usize;
         let w_cols = read_u32(&mut file)? as usize;
-        // gamma
         let mut w_data = Vec::with_capacity(w_rows * w_cols);
         for _ in 0..(w_rows * w_cols) {
             w_data.push(read_f32(&mut file)?);
@@ -223,8 +205,7 @@ impl RBFN {
 mod tests {
     use super::*;
 
-    /// Builds a simple 2-class, 2D dataset: one cluster near (0,0) labeled
-    /// class 0, one near (5,5) labeled class 1. One-hot targets.
+
     fn toy_dataset() -> (Matrix, Matrix) {
         let x = Matrix::from_vec(vec![
             0.0, 0.0,
@@ -234,7 +215,7 @@ mod tests {
             5.1, 4.9,
             4.8, 5.2,
         ], 6, 2);
-        // one-hot: class 0 = [1, 0], class 1 = [0, 1]
+
         let y = Matrix::from_vec(vec![
             1.0, 0.0,
             1.0, 0.0,
@@ -248,8 +229,7 @@ mod tests {
 
     #[test]
     fn test_naive_perfectly_fits_training_data() {
-        // The naive RBFN interpolates every training point exactly,
-        // so training accuracy must be 100%.
+
         let (x, y) = toy_dataset();
         let model = RBFN::train_naive(&x, &y, 1.0);
         let acc = model.accuracy(&x, &y);
@@ -258,7 +238,7 @@ mod tests {
 
     #[test]
     fn test_kcenters_separates_two_clusters() {
-        // With 2 centers on two clean clusters, training accuracy should be perfect.
+
         let (x, y) = toy_dataset();
         let model = RBFN::train(&x, &y, 2, 1.0, 20, 0);
         let acc = model.accuracy(&x, &y);
@@ -285,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_generalizes_to_nearby_point() {
-        // A point near the class-0 cluster should be predicted as class 0.
+
         let (x, y) = toy_dataset();
         let model = RBFN::train(&x, &y, 2, 1.0, 20, 0);
         let test_point = Matrix::from_vec(vec![0.15, 0.15], 1, 2);
@@ -299,7 +279,7 @@ mod tests {
         let model = RBFN::train(&x, &y, 2, 1.0, 20, 0);
         let out = model.forward(&x);
         assert_eq!(out.rows, 6);
-        assert_eq!(out.cols, 2); // one column per class
+        assert_eq!(out.cols, 2);
     }
 
     #[test]
@@ -311,10 +291,10 @@ mod tests {
         original.save(path).expect("save failed");
         let loaded = RBFN::load(path).expect("load failed");
 
-        // Predictions must match exactly
+
         assert_eq!(original.predict(&x), loaded.predict(&x));
 
-        // gamma and matrix dims preserved
+
         assert_eq!(original.gamma, loaded.gamma);
         assert_eq!(original.centers.rows, loaded.centers.rows);
         assert_eq!(original.weights.data.len(), loaded.weights.data.len());

@@ -199,7 +199,6 @@ fn main() {
     print_predictions(&svm_rbf_preds2, &y_nonlinear);
     println!("Final accuracy: {:.1}%", svm_rbf2.accuracy(&x_nonlinear, &y_nonlinear) * 100.0);}
 
-/// Pretty-prints a dataset
 fn print_dataset(name: &str, data: &[([f32; 2], usize)]) {
     let class_names = ["cat", "lion", "cheetah"];
     println!("{}:", name);
@@ -208,7 +207,6 @@ fn print_dataset(name: &str, data: &[([f32; 2], usize)]) {
     }
 }
 
-/// Prints predicted vs actual label for every sample
 fn print_predictions(predictions: &[usize], labels: &[usize]) {
     let class_names = ["cat", "lion", "cheetah"];
     for i in 0..predictions.len() {
@@ -220,7 +218,6 @@ fn print_predictions(predictions: &[usize], labels: &[usize]) {
     }
 }
 
-/// Prints only the samples the linear model got wrong (the KO cases)
 fn print_ko_cases(predictions: &[usize], labels: &[usize], data: &[([f32; 2], usize)]) {
     let class_names = ["cat", "lion", "cheetah"];
     let mut ko_count = 0;
@@ -243,7 +240,6 @@ fn print_ko_cases(predictions: &[usize], labels: &[usize], data: &[([f32; 2], us
     }
 }
 
-/// Converts raw Vec of (point, label) into a Matrix (N x 2) and a Vec<usize> of labels
 fn to_matrix(data: &[([f32; 2], usize)]) -> (Matrix, Vec<usize>) {
     let rows = data.len();
     let cols = 2;

@@ -49,7 +49,7 @@ impl Rosenblatt {
     }
 
     pub fn train(&mut self, x : &Matrix, y: &Vec<i32>, epochs : usize){
-        //add the bias
+
         let x_with_bias = Self::add_bias_column(self,x);
         let nb_sample :f32 = x.rows as f32;
 

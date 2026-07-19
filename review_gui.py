@@ -33,7 +33,6 @@ class ImageReviewer(tk.Tk):
         self.geometry("1100x800")
         self.minsize(900, 650)
 
-        # State
         self.files = self._scan_files()
         if shuffle:
             random.shuffle(self.files)
@@ -42,12 +41,12 @@ class ImageReviewer(tk.Tk):
         self.current_path: Path | None = None
         self.current_img = None
         self.current_tk = None
-        self.last_action_stack = []  # list of tuples (src, dst)
+        self.last_action_stack = []
 
-        # UI
+
         self._build_ui()
 
-        # Keybindings (fast workflow)
+
         self.bind("<Right>", lambda e: self.keep())
         self.bind("<Left>", lambda e: self.reject())
         self.bind("<space>", lambda e: self.skip())
@@ -59,10 +58,9 @@ class ImageReviewer(tk.Tk):
         self.bind("s", lambda e: self.skip())
         self.bind("u", lambda e: self.undo())
 
-        # Resize handling
         self.bind("<Configure>", lambda e: self._render_current())
 
-        # Start
+
         if not self.files:
             messagebox.showinfo("No images", f"No images found in {self.downloads_dir}")
             self.destroy()
@@ -71,7 +69,7 @@ class ImageReviewer(tk.Tk):
         self._load_current()
 
     def _build_ui(self):
-        # Top info bar
+
         top = tk.Frame(self, padx=10, pady=8)
         top.pack(side=tk.TOP, fill=tk.X)
 
@@ -83,11 +81,11 @@ class ImageReviewer(tk.Tk):
         tk.Label(top, textvariable=self.status_var, font=("Segoe UI", 11)).pack(side=tk.LEFT, padx=15)
         tk.Label(top, textvariable=self.path_var, font=("Consolas", 10), anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # Image display area
+
         self.canvas = tk.Canvas(self, bg="#111111", highlightthickness=0)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        # Bottom buttons
+
         bottom = tk.Frame(self, padx=10, pady=10)
         bottom.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -126,7 +124,7 @@ class ImageReviewer(tk.Tk):
 
         try:
             img = Image.open(self.current_path)
-            img = ImageOps.exif_transpose(img)  # handle phone rotations
+            img = ImageOps.exif_transpose(img)
             self.current_img = img.convert("RGB") if img.mode not in ("RGB", "RGBA") else img
         except Exception as e:
             self.status_var.set(f"Failed to open image: {e}")
@@ -149,7 +147,7 @@ class ImageReviewer(tk.Tk):
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
 
-        # Fit image to canvas while preserving aspect ratio
+
         img = self.current_img
         iw, ih = img.size
         scale = min(cw / iw, ch / ih)
@@ -166,7 +164,7 @@ class ImageReviewer(tk.Tk):
         dst_dir.mkdir(parents=True, exist_ok=True)
         dst = dst_dir / src.name
 
-        # avoid overwrite: add suffix if file exists
+
         if dst.exists():
             stem = src.stem
             ext = src.suffix
@@ -197,20 +195,19 @@ class ImageReviewer(tk.Tk):
             self.status_var.set("Nothing to undo")
             return
 
-        src, dst = self.last_action_stack.pop()  # src=old, dst=new
-        # Move back to downloads
+        src, dst = self.last_action_stack.pop()
+
         try:
             restored = self._safe_move(Path(dst), self.downloads_dir)
         except Exception as e:
             self.status_var.set(f"Undo failed: {e}")
             return
 
-        # Put restored file back into the list right after current index
-        # so you can re-review immediately if you want.
+
         self.files.insert(self.idx, restored)
         self.status_var.set("UNDO OK")
 
-        # Reload current (which is now the restored image)
+
         self._load_current()
 
     def _move_current(self, target_dir: Path, label: str):
